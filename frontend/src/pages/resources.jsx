@@ -1,6 +1,7 @@
 import CrudResource, { capitaliserMots } from '../components/CrudResource';
 import { Tag } from '../components/ui';
 import { motion } from 'framer-motion';
+import { useState, useMemo, useCallback } from 'react';
 
 // ---------- Animation d'entrée ----------
 const pageVariants = {
@@ -14,6 +15,197 @@ const pageTransition = {
   stiffness: 300,
   damping: 30,
   duration: 0.3
+};
+
+// ---------- Composant de recherche avancée ----------
+const SearchBar = ({ onSearch, onFilter, filters, columns, placeholder = "Rechercher..." }) => {
+  const [query, setQuery] = useState('');
+  const [activeFilters, setActiveFilters] = useState({});
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [filterType, setFilterType] = useState('contains');
+  const [selectedColumn, setSelectedColumn] = useState('');
+
+  const handleSearch = (e) => {
+    const value = e.target.value;
+    setQuery(value);
+    onSearch(value);
+  };
+
+  const handleFilterChange = (column, value) => {
+    const newFilters = { ...activeFilters, [column]: value };
+    if (!value) delete newFilters[column];
+    setActiveFilters(newFilters);
+    onFilter(newFilters);
+  };
+
+  const clearFilters = () => {
+    setActiveFilters({});
+    setQuery('');
+    onSearch('');
+    onFilter({});
+  };
+
+  const filterOptions = {
+    contains: 'Contient',
+    startsWith: 'Commence par',
+    endsWith: 'Se termine par',
+    equals: 'Égal à',
+    notEquals: 'Différent de',
+    greaterThan: 'Supérieur à',
+    lessThan: 'Inférieur à',
+    between: 'Entre',
+    in: 'Dans la liste',
+    notIn: 'Pas dans la liste'
+  };
+
+  return (
+    <div className="search-container">
+      <div className="search-bar">
+        <div className="search-input-wrapper">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            className="search-input"
+            placeholder={placeholder}
+            value={query}
+            onChange={handleSearch}
+          />
+          {query && (
+            <button className="clear-search" onClick={() => { setQuery(''); onSearch(''); }}>
+              ✕
+            </button>
+          )}
+        </div>
+        <div className="search-actions">
+          <button 
+            className={`btn btn-ghost btn-sm ${showAdvanced ? 'active' : ''}`}
+            onClick={() => setShowAdvanced(!showAdvanced)}
+          >
+            {showAdvanced ? 'Masquer' : 'Filtres avancés'} ⚙️
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={clearFilters}>
+            Effacer tout
+          </button>
+        </div>
+      </div>
+
+      {/* Filtres avancés */}
+      {showAdvanced && (
+        <div className="advanced-filters">
+          <div className="filter-row">
+            <select 
+              className="filter-select"
+              value={selectedColumn}
+              onChange={(e) => setSelectedColumn(e.target.value)}
+            >
+              <option value="">Sélectionner une colonne</option>
+              {columns.map(col => (
+                <option key={col.key} value={col.key}>{col.label}</option>
+              ))}
+            </select>
+            
+            <select 
+              className="filter-select"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+            >
+              {Object.entries(filterOptions).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+
+            <input
+              type="text"
+              className="filter-input"
+              placeholder="Valeur..."
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  const value = e.target.value;
+                  if (selectedColumn && value) {
+                    handleFilterChange(selectedColumn, { type: filterType, value });
+                    e.target.value = '';
+                  }
+                }
+              }}
+            />
+            <button className="btn btn-primary btn-sm">Appliquer</button>
+          </div>
+
+          {/* Filtres actifs */}
+          <div className="active-filters">
+            {Object.entries(activeFilters).map(([key, filter]) => (
+              <span key={key} className="filter-tag">
+                {columns.find(c => c.key === key)?.label || key}: {filter.value}
+                <button onClick={() => handleFilterChange(key, null)}>×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------- Hook de recherche et filtrage ----------
+const useSearchAndFilter = (data, searchKeys, filters = {}) => {
+  return useMemo(() => {
+    if (!data) return [];
+
+    let result = [...data];
+
+    // Application des filtres avancés
+    Object.entries(filters).forEach(([key, filter]) => {
+      result = result.filter(item => {
+        const value = getNestedValue(item, key);
+        if (value === undefined || value === null) return false;
+
+        const strValue = String(value).toLowerCase();
+        const strFilter = String(filter.value).toLowerCase();
+
+        switch (filter.type) {
+          case 'contains':
+            return strValue.includes(strFilter);
+          case 'startsWith':
+            return strValue.startsWith(strFilter);
+          case 'endsWith':
+            return strValue.endsWith(strFilter);
+          case 'equals':
+            return strValue === strFilter;
+          case 'notEquals':
+            return strValue !== strFilter;
+          case 'greaterThan':
+            return parseFloat(value) > parseFloat(filter.value);
+          case 'lessThan':
+            return parseFloat(value) < parseFloat(filter.value);
+          case 'between':
+            const [min, max] = filter.value.split(',').map(v => parseFloat(v.trim()));
+            return parseFloat(value) >= min && parseFloat(value) <= max;
+          case 'in':
+            const values = filter.value.split(',').map(v => v.trim().toLowerCase());
+            return values.some(v => strValue.includes(v));
+          case 'notIn':
+            const notValues = filter.value.split(',').map(v => v.trim().toLowerCase());
+            return !notValues.some(v => strValue.includes(v));
+          default:
+            return true;
+        }
+      });
+    });
+
+    return result;
+  }, [data, filters]);
+};
+
+// Fonction utilitaire pour accéder aux propriétés imbriquées
+const getNestedValue = (obj, path) => {
+  if (!obj || !path) return undefined;
+  const parts = path.split('.');
+  let current = obj;
+  for (const part of parts) {
+    if (current === undefined || current === null) return undefined;
+    current = current[part];
+  }
+  return current;
 };
 
 // ---------- Listes de valeurs ----------
@@ -78,8 +270,10 @@ export function FilieresPage() {
       transition={pageTransition}
     >
       <CrudResource
-        sousTitre="Filières de formation de l'EMIT" endpoint="filieres"
-        libelleAjout="Nouvelle filière" rechercheKeys={['codeFiliere', 'nom']}
+        sousTitre="Filières de formation de l'EMIT" 
+        endpoint="filieres"
+        libelleAjout="Nouvelle filière" 
+        rechercheKeys={['codeFiliere', 'nom']}
         columns={[
           { key: 'codeFiliere', label: 'Code', render: (r) => <span className="badge badge-blue">{r.codeFiliere}</span> },
           { key: 'lettreSpecifique', label: 'Lettre', render: (r) => <span className="badge badge-amber">{r.lettreSpecifique}</span> },
@@ -92,6 +286,8 @@ export function FilieresPage() {
           { name: 'nom', label: 'Intitulé', required: true },
           { name: 'description', label: 'Description', type: 'textarea', full: true },
         ]}
+        searchPlaceholder="Rechercher par code ou nom..."
+        filterableColumns={['codeFiliere', 'nom', 'lettreSpecifique']}
       />
     </motion.div>
   );
@@ -108,8 +304,10 @@ export function NiveauxPage() {
       transition={pageTransition}
     >
       <CrudResource
-        sousTitre="Niveaux d'études " endpoint="niveaux"
-        libelleAjout="Nouveau niveau" rechercheKeys={['nom']}
+        sousTitre="Niveaux d'études" 
+        endpoint="niveaux"
+        libelleAjout="Nouveau niveau" 
+        rechercheKeys={['nom']}
         columns={[
           { key: 'nom', label: 'Niveau', render: (r) => <strong>{r.nom}</strong> },
           { key: 'ordre', label: "Ordre d'affichage" },
@@ -118,6 +316,8 @@ export function NiveauxPage() {
           { name: 'nom', label: 'Nom', required: true, placeholder: 'L1', transform: majUn, hint: 'Commence par une majuscule.' },
           { name: 'ordre', label: 'Ordre', type: 'number', numeric: true, required: true, min: 1, mask: 'digits', hint: 'Chiffres uniquement.' },
         ]}
+        searchPlaceholder="Rechercher un niveau..."
+        filterableColumns={['nom', 'ordre']}
       />
     </motion.div>
   );
@@ -134,8 +334,10 @@ export function ParcoursPage() {
       transition={pageTransition}
     >
       <CrudResource
-        titre="Parcours" sousTitre="Parcours / spécialités au sein des filières" endpoint="parcours"
-        libelleAjout="Nouveau parcours" rechercheKeys={['nom', 'filiere.nom']}
+        sousTitre="Parcours / spécialités au sein des filières" 
+        endpoint="parcours"
+        libelleAjout="Nouveau parcours" 
+        rechercheKeys={['nom', 'filiere.nom']}
         columns={[
           { key: 'nom', label: 'Parcours' },
           { key: 'filiere.nom', label: 'Filière' },
@@ -144,6 +346,8 @@ export function ParcoursPage() {
           { name: 'nom', label: 'Nom du parcours', required: true, full: true },
           { name: 'filiereId', label: 'Filière', type: 'select', ref: 'filieres', optionLabel: nomFiliere, required: true, full: true },
         ]}
+        searchPlaceholder="Rechercher par parcours ou filière..."
+        filterableColumns={['nom', 'filiere.nom']}
       />
     </motion.div>
   );
@@ -160,8 +364,10 @@ export function MatieresPage() {
       transition={pageTransition}
     >
       <CrudResource
-        titre="Matières" sousTitre="Unités d'enseignement par filière et niveau" endpoint="matieres"
-        libelleAjout="Nouvelle matière" rechercheKeys={['codeMatiere', 'nom']}
+        sousTitre="Unités d'enseignement par filière et niveau" 
+        endpoint="matieres"
+        libelleAjout="Nouvelle matière" 
+        rechercheKeys={['codeMatiere', 'nom']}
         derive={(form, ref) => {
           const niv = (ref.niveaux || []).find((n) => String(n.id) === String(form.niveauId));
           const allowed = SEMESTRES_NIVEAU[niv?.nom] || [];
@@ -190,6 +396,8 @@ export function MatieresPage() {
             disabled: (form) => !form.niveauId, hint: 'Dépend du niveau choisi.' },
           { name: 'parcoursId', label: 'Parcours (optionnel)', type: 'select', ref: 'parcours' },
         ]}
+        searchPlaceholder="Rechercher par code ou intitulé..."
+        filterableColumns={['codeMatiere', 'nom', 'filiere.nom', 'niveau.nom', 'semestre', 'coefficient', 'creditsEcts']}
       />
     </motion.div>
   );
@@ -206,8 +414,10 @@ export function SallesPage() {
       transition={pageTransition}
     >
       <CrudResource
-        titre="Salles" sousTitre="Salles, amphithéâtres et studios" endpoint="salles"
-        libelleAjout="Nouvelle salle" rechercheKeys={['nom']}
+        sousTitre="Salles, amphithéâtres et studios" 
+        endpoint="salles"
+        libelleAjout="Nouvelle salle" 
+        rechercheKeys={['nom']}
         columns={[
           { key: 'nom', label: 'Salle', render: (r) => <strong>{r.nom}</strong> },
           { key: 'typeSalle', label: 'Type', render: (r) => <Tag value={r.typeSalle} /> },
@@ -220,6 +430,8 @@ export function SallesPage() {
           { name: 'capacite', label: 'Capacité', type: 'number', numeric: true, required: true, min: 1, mask: 'digits' },
           { name: 'batimentId', label: 'Bâtiment', type: 'select', ref: 'batiments', required: true },
         ]}
+        searchPlaceholder="Rechercher une salle..."
+        filterableColumns={['nom', 'typeSalle', 'capacite', 'batiment.nom']}
       />
     </motion.div>
   );
@@ -236,8 +448,10 @@ export function BatimentsPage() {
       transition={pageTransition}
     >
       <CrudResource
-        titre="Bâtiments" sousTitre="Bâtiments du campus" endpoint="batiments"
-        libelleAjout="Nouveau bâtiment" rechercheKeys={['nom', 'adresse']}
+        sousTitre="Bâtiments de l'école" 
+        endpoint="batiments"
+        libelleAjout="Nouveau bâtiment" 
+        rechercheKeys={['nom', 'adresse']}
         columns={[
           { key: 'nom', label: 'Bâtiment', render: (r) => <strong>{r.nom}</strong> },
           { key: 'adresse', label: 'Adresse', render: (r) => <span className="muted">{r.adresse || '—'}</span> },
@@ -246,6 +460,8 @@ export function BatimentsPage() {
           { name: 'nom', label: 'Nom', required: true, placeholder: 'Bâtiment B' },
           { name: 'adresse', label: 'Adresse', full: true },
         ]}
+        searchPlaceholder="Rechercher par nom ou adresse..."
+        filterableColumns={['nom', 'adresse']}
       />
     </motion.div>
   );
@@ -262,8 +478,10 @@ export function EnseignantsPage() {
       transition={pageTransition}
     >
       <CrudResource
-        titre="Enseignants" sousTitre="Corps enseignant de l'EMIT" endpoint="enseignants"
-        libelleAjout="Nouvel enseignant" rechercheKeys={['nom', 'prenoms', 'email']}
+        sousTitre="Corps enseignant de l'EMIT" 
+        endpoint="enseignants"
+        libelleAjout="Nouvel enseignant" 
+        rechercheKeys={['nom', 'prenoms', 'email']}
         columns={[
           { key: 'nom', label: 'Nom', render: (r) => <strong>{r.nom} {r.prenoms}</strong> },
           { key: 'grade', label: 'Grade', render: (r) => <Tag value={r.grade} /> },
@@ -277,6 +495,8 @@ export function EnseignantsPage() {
           { name: 'email', label: 'Email', type: 'email', required: true, validate: valEmail },
           { name: 'telephone', label: 'Téléphone', mask: 'phone', validate: valTelephone, placeholder: '0341234567' },
         ]}
+        searchPlaceholder="Rechercher par nom, prénom ou email..."
+        filterableColumns={['nom', 'prenoms', 'grade', 'email', 'telephone']}
       />
     </motion.div>
   );
@@ -293,8 +513,10 @@ export function GroupesPage() {
       transition={pageTransition}
     >
       <CrudResource
-        titre="Groupes" sousTitre="Groupes d'étudiants par niveau" endpoint="groupes"
-        libelleAjout="Nouveau groupe" rechercheKeys={['nom']}
+        sousTitre="Groupes d'étudiants par niveau" 
+        endpoint="groupes"
+        libelleAjout="Nouveau groupe" 
+        rechercheKeys={['nom']}
         derive={(form, ref) => {
           const niv = (ref.niveaux || []).find((n) => String(n.id) === String(form.niveauId));
           const fil = (ref.filieres || []).find((f) => String(f.id) === String(form.filiereId));
@@ -314,6 +536,8 @@ export function GroupesPage() {
           { name: 'parcoursId', label: 'Parcours (optionnel)', type: 'select', ref: 'parcours' },
           { name: 'nom', label: 'Nom du groupe (généré)', readOnly: true, full: true, hint: 'Composé automatiquement : Niveau Code-Filière Groupe (ex : L2 INFO A).' },
         ]}
+        searchPlaceholder="Rechercher un groupe..."
+        filterableColumns={['nom', 'filiere.nom', 'niveau.nom', 'parcours.nom']}
       />
     </motion.div>
   );
@@ -330,8 +554,10 @@ export function EtudiantsPage() {
       transition={pageTransition}
     >
       <CrudResource
-        titre="Étudiants" sousTitre="Étudiants inscrits par filière et niveau" endpoint="etudiants"
-        libelleAjout="Nouvel étudiant" rechercheKeys={['matricule', 'nom', 'prenoms', 'email']}
+        sousTitre="Étudiants inscrits par filière et niveau" 
+        endpoint="etudiants"
+        libelleAjout="Nouvel étudiant" 
+        rechercheKeys={['matricule', 'nom', 'prenoms', 'email']}
         makeDefaults={(ref) => {
           const l1 = (ref.niveaux || []).find((n) => n.nom === 'L1');
           const active = (ref.anneesacademiques || []).find((a) => a.active);
@@ -379,6 +605,8 @@ export function EtudiantsPage() {
           { name: 'statut', label: 'Statut', type: 'select', options: STATUT, required: true },
           { name: 'anneeAcademiqueId', label: 'Année académique', type: 'select', ref: 'anneesacademiques', optionLabel: (a) => a.libelle, hidden: true },
         ]}
+        searchPlaceholder="Rechercher par matricule, nom, prénom ou email..."
+        filterableColumns={['matricule', 'nom', 'prenoms', 'filiere.nom', 'niveau.nom', 'statut', 'email', 'telephone']}
       />
     </motion.div>
   );
@@ -397,7 +625,9 @@ export function DisponibilitesPage() {
       <CrudResource
         titre="Disponibilités des enseignants"
         sousTitre="Créneaux hebdomadaires (7h–19h) utilisés pour planifier les séances et détecter les conflits"
-        endpoint="disponibilites" libelleAjout="Nouveau créneau" rechercheKeys={['enseignant.nom', 'enseignant.prenoms']}
+        endpoint="disponibilites" 
+        libelleAjout="Nouveau créneau" 
+        rechercheKeys={['enseignant.nom', 'enseignant.prenoms']}
         columns={[
           { key: 'enseignant', label: 'Enseignant', render: (r) => <strong>{r.enseignant ? nomPersonne(r.enseignant) : '—'}</strong> },
           { key: 'jourSemaine', label: 'Jour' },
@@ -414,6 +644,8 @@ export function DisponibilitesPage() {
             validate: (v, form) => { if (!form.heureDebut) return null; if (v <= form.heureDebut) return "Doit être après l'heure de début."; const [h1, m1] = form.heureDebut.split(':').map(Number); const [h2, m2] = v.split(':').map(Number); if ((h2 * 60 + m2) - (h1 * 60 + m1) < 60) return 'Durée minimale : 1 heure.'; return null; } },
           { name: 'commentaire', label: 'Commentaire', full: true },
         ]}
+        searchPlaceholder="Rechercher par nom d'enseignant..."
+        filterableColumns={['enseignant.nom', 'enseignant.prenoms', 'jourSemaine', 'disponible']}
       />
     </motion.div>
   );
