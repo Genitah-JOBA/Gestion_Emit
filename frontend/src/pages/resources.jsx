@@ -1,5 +1,20 @@
 import CrudResource, { capitaliserMots } from '../components/CrudResource';
 import { Tag } from '../components/ui';
+import { motion } from 'framer-motion';
+
+// ---------- Animation d'entrée ----------
+const pageVariants = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -20 }
+};
+
+const pageTransition = {
+  type: 'spring',
+  stiffness: 300,
+  damping: 30,
+  duration: 0.3
+};
 
 // ---------- Listes de valeurs ----------
 const opt = (arr) => arr.map((v) => ({ value: v, label: v }));
@@ -54,7 +69,14 @@ const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
 // ======================================================================
 export function FilieresPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         sousTitre="Filières de formation de l'EMIT" endpoint="filieres"
         libelleAjout="Nouvelle filière" rechercheKeys={['codeFiliere', 'nom']}
@@ -71,15 +93,22 @@ export function FilieresPage() {
           { name: 'description', label: 'Description', type: 'textarea', full: true },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function NiveauxPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
-        titre="Niveaux" sousTitre="Niveaux d'études (L1 à M2)" endpoint="niveaux"
+        sousTitre="Niveaux d'études " endpoint="niveaux"
         libelleAjout="Nouveau niveau" rechercheKeys={['nom']}
         columns={[
           { key: 'nom', label: 'Niveau', render: (r) => <strong>{r.nom}</strong> },
@@ -90,13 +119,20 @@ export function NiveauxPage() {
           { name: 'ordre', label: 'Ordre', type: 'number', numeric: true, required: true, min: 1, mask: 'digits', hint: 'Chiffres uniquement.' },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function ParcoursPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         titre="Parcours" sousTitre="Parcours / spécialités au sein des filières" endpoint="parcours"
         libelleAjout="Nouveau parcours" rechercheKeys={['nom', 'filiere.nom']}
@@ -109,13 +145,20 @@ export function ParcoursPage() {
           { name: 'filiereId', label: 'Filière', type: 'select', ref: 'filieres', optionLabel: nomFiliere, required: true, full: true },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function MatieresPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         titre="Matières" sousTitre="Unités d'enseignement par filière et niveau" endpoint="matieres"
         libelleAjout="Nouvelle matière" rechercheKeys={['codeMatiere', 'nom']}
@@ -148,13 +191,20 @@ export function MatieresPage() {
           { name: 'parcoursId', label: 'Parcours (optionnel)', type: 'select', ref: 'parcours' },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function SallesPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         titre="Salles" sousTitre="Salles, amphithéâtres et studios" endpoint="salles"
         libelleAjout="Nouvelle salle" rechercheKeys={['nom']}
@@ -171,13 +221,20 @@ export function SallesPage() {
           { name: 'batimentId', label: 'Bâtiment', type: 'select', ref: 'batiments', required: true },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function BatimentsPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         titre="Bâtiments" sousTitre="Bâtiments du campus" endpoint="batiments"
         libelleAjout="Nouveau bâtiment" rechercheKeys={['nom', 'adresse']}
@@ -190,13 +247,20 @@ export function BatimentsPage() {
           { name: 'adresse', label: 'Adresse', full: true },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function EnseignantsPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         titre="Enseignants" sousTitre="Corps enseignant de l'EMIT" endpoint="enseignants"
         libelleAjout="Nouvel enseignant" rechercheKeys={['nom', 'prenoms', 'email']}
@@ -214,13 +278,20 @@ export function EnseignantsPage() {
           { name: 'telephone', label: 'Téléphone', mask: 'phone', validate: valTelephone, placeholder: '0341234567' },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function GroupesPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         titre="Groupes" sousTitre="Groupes d'étudiants par niveau" endpoint="groupes"
         libelleAjout="Nouveau groupe" rechercheKeys={['nom']}
@@ -244,13 +315,20 @@ export function GroupesPage() {
           { name: 'nom', label: 'Nom du groupe (généré)', readOnly: true, full: true, hint: 'Composé automatiquement : Niveau Code-Filière Groupe (ex : L2 INFO A).' },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function EtudiantsPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         titre="Étudiants" sousTitre="Étudiants inscrits par filière et niveau" endpoint="etudiants"
         libelleAjout="Nouvel étudiant" rechercheKeys={['matricule', 'nom', 'prenoms', 'email']}
@@ -302,13 +380,20 @@ export function EtudiantsPage() {
           { name: 'anneeAcademiqueId', label: 'Année académique', type: 'select', ref: 'anneesacademiques', optionLabel: (a) => a.libelle, hidden: true },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
 
 export function DisponibilitesPage() {
   return (
-    <div className="page-enter">
+    <motion.div
+      className="page-enter"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={pageTransition}
+    >
       <CrudResource
         titre="Disponibilités des enseignants"
         sousTitre="Créneaux hebdomadaires (7h–19h) utilisés pour planifier les séances et détecter les conflits"
@@ -330,6 +415,6 @@ export function DisponibilitesPage() {
           { name: 'commentaire', label: 'Commentaire', full: true },
         ]}
       />
-    </div>
+    </motion.div>
   );
 }
