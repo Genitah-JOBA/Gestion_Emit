@@ -180,3 +180,19 @@ table.data tbody tr:hover { background: var(--primary-50); }
   .cell { border-color: #bbb !important; }
   @page { size: A4 landscape; margin: 10mm; }
 }
+
+/* Animation d'entrée pour toutes les pages */
+.page-enter {
+  animation: fadeSlideUp 0.4s ease-out forwards;
+}
+
+@keyframes fadeSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
