@@ -15,7 +15,8 @@ import { Confirm, Empty, Field, Loading, Modal } from './ui';
  */
 export default function CrudResource({
   titre, sousTitre, endpoint, columns, fields,
-  rechercheKeys = [], libelleAjout = 'Ajouter',
+  rechercheKeys = [], filterableColumns = [], searchPlaceholder,
+  libelleAjout = 'Ajouter',
   makeDefaults, derive,
 }) {
   const { peutGerer } = useAuth();
@@ -55,13 +56,20 @@ export default function CrudResource({
 
   useEffect(() => { charger(); /* eslint-disable-next-line */ }, [endpoint]);
 
+  // Recherche « sous tous les angles » : on interroge toutes les colonnes de la ligne,
+  // en combinant les clés de recherche déclarées et les colonnes filtrables.
+  const searchKeys = useMemo(
+    () => [...new Set([...rechercheKeys, ...filterableColumns])],
+    [rechercheKeys, filterableColumns]
+  );
+
   const filtres = useMemo(() => {
     if (!q.trim()) return items;
     const t = q.toLowerCase();
     return items.filter((it) =>
-      rechercheKeys.some((k) => String(getPath(it, k) ?? '').toLowerCase().includes(t))
+      searchKeys.some((k) => texteRecherchable(getPath(it, k)).includes(t))
     );
-  }, [items, q, rechercheKeys]);
+  }, [items, q, searchKeys]);
 
   function ouvrirCreation() {
     let base = initialValues(fields);
@@ -153,11 +161,11 @@ export default function CrudResource({
         )}
       </div>
 
-      {rechercheKeys.length > 0 && (
+      {searchKeys.length > 0 && (
         <div className="toolbar">
           <div className="search">
             <Icon.search />
-            <input className="input" placeholder="Rechercher…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="input" placeholder={searchPlaceholder || 'Rechercher…'} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <span className="muted">{filtres.length} élément(s)</span>
         </div>
@@ -199,7 +207,7 @@ export default function CrudResource({
 
       {edition && (
         <Modal
-          title={edition.id ? `Modifier — ${titre}` : `Nouveau — ${titre}`}
+          title={edition.id ? `Modifier — ${titre || libelleAjout}` : `Nouveau — ${titre || libelleAjout}`}
           onClose={() => setEdition(null)}
           footer={
             <>
@@ -343,7 +351,20 @@ function optionsDe(field, refData, form) {
 }
 
 function getPath(obj, path) {
-  return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+  return path.split('.').reduce((o, k) => {
+    if (o == null) return o;
+    // Traverse les tableaux (ex: parcours.niveaux[].nom) pour renvoyer la liste des valeurs.
+    if (Array.isArray(o)) return o.map((el) => (el == null ? el : el[k]));
+    return o[k];
+  }, obj);
+}
+
+// Aplati une valeur (chaîne, nombre, tableau, objet) en texte minuscule pour la recherche.
+function texteRecherchable(val) {
+  if (val == null) return '';
+  if (Array.isArray(val)) return val.map(texteRecherchable).join(' ');
+  if (typeof val === 'object') return Object.values(val).map(texteRecherchable).join(' ');
+  return String(val).toLowerCase();
 }
 
 function initialValues(fields) {
