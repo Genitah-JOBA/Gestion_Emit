@@ -1,8 +1,20 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '../auth/AuthContext';
 import Icon from '../lib/icons';
 import { Confirm } from './ui';
+
+// ---------- Variants d'animation de la barre latérale ----------
+const navContainer = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.15 } },
+};
+
+const navSection = {
+  hidden: { opacity: 0, x: -16 },
+  show: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 300, damping: 26 } },
+};
 
 const SECTIONS = [
   {
@@ -146,17 +158,109 @@ export default function Layout() {
           opacity: 1 !important;
         }
 
+        /* ===== BOUTON DÉCONNEXION STYLISÉ ===== */
+        .logout-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          border: none;
+          border-radius: 8px;
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+          color: #ef4444;
+          font-size: 0.8rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          font-family: 'Inter', sans-serif;
+          position: relative;
+          overflow: hidden;
+          flex-shrink: 0;
+        }
+
+        .logout-btn::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05));
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+
+        .logout-btn:hover::before {
+          opacity: 1;
+        }
+
+        .logout-btn:hover {
+          transform: translateX(-2px);
+          box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
+        }
+
+        .logout-btn:active {
+          transform: scale(0.95);
+        }
+
+        .logout-btn svg {
+          width: 18px;
+          height: 18px;
+          position: relative;
+          z-index: 1;
+          transition: transform 0.3s ease;
+        }
+
+        .logout-btn:hover svg {
+          transform: translateX(-2px) rotate(-5deg);
+        }
+
+        .logout-btn .logout-text {
+          position: relative;
+          z-index: 1;
+        }
+
+        .logout-btn .logout-icon-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          background: rgba(239, 68, 68, 0.15);
+          position: relative;
+          z-index: 1;
+          transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover .logout-icon-wrapper {
+          background: rgba(239, 68, 68, 0.25);
+          transform: scale(1.05);
+        }
+
         /* ===== BURGER RESPONSIVE ===== */
         @media (max-width: 768px) {
           .burger {
             display: block !important;
+          }
+          .logout-btn .logout-text {
+            display: none;
+          }
+          .logout-btn {
+            padding: 8px 10px;
+          }
+          .logout-btn .logout-icon-wrapper {
+            width: 24px;
+            height: 24px;
           }
         }
       `}</style>
 
       <div className="app-shell">
         <aside className={`sidebar ${open ? 'open' : ''}`}>
-          <div className="sidebar-brand">
+          <motion.div
+            className="sidebar-brand"
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+          >
             <div className="brand-logo">
               <img src="/logoNoir.png" alt="EMIT" />
             </div>
@@ -164,14 +268,14 @@ export default function Layout() {
               <strong>EMIT</strong>
               <span>Gestion des études</span>
             </div>
-          </div>
+          </motion.div>
 
-          <nav onClick={() => setOpen(false)}>
+          <motion.nav onClick={() => setOpen(false)} variants={navContainer} initial="hidden" animate="show">
             {SECTIONS.map((sec, i) => {
               const items = sec.items.filter(visible);
               if (items.length === 0) return null;
               return (
-                <div className="nav-section" key={i}>
+                <motion.div className="nav-section" key={i} variants={navSection}>
                   {sec.label && <div className="nav-label">{sec.label}</div>}
                   {items.map((it) => {
                     const ICmp = Icon[it.icon];
@@ -181,10 +285,10 @@ export default function Layout() {
                       </NavLink>
                     );
                   })}
-                </div>
+                </motion.div>
               );
             })}
-          </nav>
+          </motion.nav>
 
           <div className="sidebar-foot">
             <div className="user-chip">
@@ -193,9 +297,18 @@ export default function Layout() {
                 <strong>{user?.nomComplet}</strong>
                 <span>{user?.role}</span>
               </div>
-              <button className="btn-icon" onClick={() => setConfirmLogout(true)} title="Se déconnecter">
-                <Icon.logout />
-              </button>
+              <motion.button
+                className="logout-btn"
+                onClick={() => setConfirmLogout(true)}
+                title="Se déconnecter"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+              >
+                <span className="logout-icon-wrapper">
+                  <Icon.logout />
+                </span>
+              </motion.button>
             </div>
           </div>
         </aside>
@@ -217,13 +330,31 @@ export default function Layout() {
           <header className="topbar">
             <button className="burger" onClick={() => setOpen(true)}><Icon.menu /></button>
             <div>
-              <h1>{titreDe(location.pathname)}</h1>
+              {/* Keyé sur le chemin : l'animation d'entrée se rejoue à chaque changement
+                  de route, sans AnimatePresence (qui pouvait bloquer le rendu sous StrictMode). */}
+              <motion.h1
+                key={location.pathname}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+              >
+                {titreDe(location.pathname)}
+              </motion.h1>
             </div>
             <div className="spacer" />
             <span className="badge badge-blue hide-mobile"><Icon.shield width={14} height={14} /> {user?.role}</span>
           </header>
           <main className="content">
-            <Outlet />
+            {/* Fondu à chaque changement de route. Pas d'AnimatePresence/mode="wait" :
+                le contenu se monte immédiatement, jamais de page blanche. */}
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Outlet />
+            </motion.div>
           </main>
         </div>
       </div>

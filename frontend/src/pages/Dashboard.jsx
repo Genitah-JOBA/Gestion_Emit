@@ -1,8 +1,20 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import api, { messageErreur } from '../api/client';
 import { useToast } from '../lib/toast';
 import { Loading } from '../components/ui';
 import Icon from '../lib/icons';
+
+// ---------- Variants d'animation ----------
+const gridVariants = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.1 } },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.96 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+};
 
 const CARTES = [
   { key: 'nbEtudiants', label: 'Étudiants', icon: 'etudiant', cls: 'ico-blue' },
@@ -332,7 +344,12 @@ export default function Dashboard() {
         }
       `}</style>
 
-      <div className="dashboard-head">
+      <motion.div
+        className="dashboard-head"
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+      >
         <div>
           <p>Vue d'ensemble de l'établissement</p>
         </div>
@@ -341,58 +358,80 @@ export default function Dashboard() {
             <Icon.annee width={14} height={14} /> {stats.anneeActive}
           </span>
         )}
-      </div>
+      </motion.div>
 
-      <div className="stats-grid">
+      <motion.div className="stats-grid" variants={gridVariants} initial="hidden" animate="show">
         {CARTES.map((c) => {
           const ICmp = Icon[c.icon];
           return (
-            <div className="stat-card" key={c.key}>
+            <motion.div
+              className="stat-card"
+              key={c.key}
+              variants={cardVariants}
+              whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(0, 0, 0, 0.08)' }}
+            >
               <div className={`stat-ico ${c.cls}`}><ICmp /></div>
               <div>
                 <div className="val">{stats[c.key]}</div>
                 <div className="lbl">{c.label}</div>
               </div>
-            </div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
       <div className="charts-grid">
-        <div className="chart-card">
-          <h3>Étudiants par filière</h3>
-          {stats.etudiantsParFiliere.length === 0 ? (
-            <p className="muted">Aucune donnée disponible.</p>
-          ) : (
-            stats.etudiantsParFiliere.map((x) => (
-              <div className="dist-row" key={x.libelle}>
-                <span className="name">{x.libelle}</span>
-                <span className="dist-bar">
-                  <span style={{ width: `${(x.total / maxFil) * 100}%` }} />
-                </span>
-                <span className="count">{x.total}</span>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="chart-card">
-          <h3>Étudiants par niveau</h3>
-          {stats.etudiantsParNiveau.length === 0 ? (
-            <p className="muted">Aucune donnée disponible.</p>
-          ) : (
-            stats.etudiantsParNiveau.map((x) => (
-              <div className="dist-row" key={x.libelle}>
-                <span className="name">{x.libelle}</span>
-                <span className="dist-bar accent">
-                  <span style={{ width: `${(x.total / maxNiv) * 100}%` }} />
-                </span>
-                <span className="count">{x.total}</span>
-              </div>
-            ))
-          )}
-        </div>
+        <DistributionCard
+          titre="Étudiants par filière"
+          data={stats.etudiantsParFiliere}
+          max={maxFil}
+          delay={0.25}
+        />
+        <DistributionCard
+          titre="Étudiants par niveau"
+          data={stats.etudiantsParNiveau}
+          max={maxNiv}
+          accent
+          delay={0.35}
+        />
       </div>
     </>
+  );
+}
+
+// Carte de distribution avec barres animées (remplissage progressif).
+function DistributionCard({ titre, data, max, accent, delay }) {
+  return (
+    <motion.div
+      className="chart-card"
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: 'easeOut', delay }}
+    >
+      <h3>{titre}</h3>
+      {data.length === 0 ? (
+        <p className="muted">Aucune donnée disponible.</p>
+      ) : (
+        data.map((x, i) => (
+          <motion.div
+            className="dist-row"
+            key={x.libelle}
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.35, delay: delay + 0.1 + i * 0.05 }}
+          >
+            <span className="name">{x.libelle}</span>
+            <span className={`dist-bar${accent ? ' accent' : ''}`}>
+              <motion.span
+                initial={{ width: 0 }}
+                animate={{ width: `${(x.total / max) * 100}%` }}
+                transition={{ duration: 0.9, ease: [0.4, 0, 0.2, 1], delay: delay + 0.2 + i * 0.05 }}
+              />
+            </span>
+            <span className="count">{x.total}</span>
+          </motion.div>
+        ))
+      )}
+    </motion.div>
   );
 }
