@@ -94,7 +94,7 @@ export default function CrudResource({
     const errs = {};
     champsVisibles(form).forEach((f) => {
       const val = form[f.name];
-      const vide = val === '' || val == null;
+      const vide = f.type === 'pills' ? !Array.isArray(val) || val.length === 0 : (val === '' || val == null);
       if (f.required && vide && f.type !== 'checkbox') { errs[f.name] = 'Ce champ est obligatoire.'; return; }
       if (!vide && f.validate) {
         const msg = f.validate(val, form, refData);
@@ -269,6 +269,38 @@ function ChampForm({ field, value, form, refData, error, onChange }) {
     );
   }
 
+  if (field.type === 'pills') {
+    const selected = Array.isArray(value) ? value.map(String) : [];
+    const options = optionsDe(field, refData, form);
+    const toggle = (val) => {
+      const s = String(val);
+      const next = selected.includes(s) ? selected.filter((x) => x !== s) : [...selected, s];
+      onChange(next.map((x) => { const n = Number(x); return Number.isNaN(n) ? x : n; }));
+    };
+    return (
+      <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+        <div className="pills-group">
+          {options.map((o) => {
+            const isSel = selected.includes(String(o.value));
+            return (
+              <button
+                type="button"
+                key={o.value}
+                disabled={disabled}
+                className={`pill${isSel ? ' selected' : ''}`}
+                onClick={() => toggle(o.value)}
+              >
+                <span className="pill-dot" />
+                {o.label}
+                {isSel && <span className="pill-check">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+    );
+  }
+
   return (
     <Field label={field.label} required={field.required} error={error} hint={field.hint}>
       {field.type === 'select' ? (
@@ -316,7 +348,7 @@ function getPath(obj, path) {
 
 function initialValues(fields) {
   const o = {};
-  fields.forEach((f) => { o[f.name] = f.default ?? (f.type === 'checkbox' ? false : ''); });
+  fields.forEach((f) => { o[f.name] = f.default ?? (f.type === 'checkbox' ? false : f.type === 'pills' ? [] : ''); });
   return o;
 }
 
@@ -324,6 +356,15 @@ function toForm(row, fields) {
   const o = { id: row.id };
   fields.forEach((f) => {
     let val = row[f.name];
+    if (f.type === 'pills') {
+      // Lit un tableau d'identifiants (ex: niveauxIds) ou le déduit d'une collection (ex: niveaux).
+      if (!Array.isArray(val)) {
+        const coll = row[f.collection || f.ref];
+        val = Array.isArray(coll) ? coll.map((x) => x[f.optionValue || 'id']) : [];
+      }
+      o[f.name] = val;
+      return;
+    }
     if (val == null) { o[f.name] = f.type === 'checkbox' ? false : ''; return; }
     if (f.type === 'time' && typeof val === 'string') val = val.slice(0, 5);
     if (f.type === 'date' && typeof val === 'string') val = val.slice(0, 10);
@@ -339,6 +380,7 @@ function construirePayload(form, fields) {
     if (f.formOnly) return; // champ d'aide à la saisie, non envoyé au backend
     let val = form[f.name];
     if (f.type === 'checkbox') { out[f.name] = !!val; return; }
+    if (f.type === 'pills') { out[f.name] = Array.isArray(val) ? val.map(Number) : []; return; }
     if (val === '' || val == null) { out[f.name] = null; return; }
     if (f.numeric || (f.ref && f.type === 'select')) val = Number(val);
     if (f.type === 'time' && typeof val === 'string' && val.length === 5) val = `${val}:00`;

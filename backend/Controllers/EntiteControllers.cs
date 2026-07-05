@@ -67,8 +67,54 @@ public class NiveauxController(AppDbContext db) : CrudController<Niveau>(db)
 
 public class ParcoursController(AppDbContext db) : CrudController<Parcours>(db)
 {
-    protected override IQueryable<Parcours> Query() => Db.Parcours.Include(p => p.Filiere);
-    protected override void Map(Parcours c, Parcours s) { c.Nom = s.Nom; c.FiliereId = s.FiliereId; }
+    protected override IQueryable<Parcours> Query() =>
+        Db.Parcours.Include(p => p.Filiere).Include(p => p.Niveaux);
+
+    protected override void Map(Parcours c, Parcours s)
+    {
+        c.Nom = s.Nom?.Trim() ?? "";
+        c.FiliereId = s.FiliereId;
+
+        var ids = (s.NiveauxIds ?? new List<int>()).Distinct().ToList();
+        // En modification, l'entité est suivie : on charge sa collection actuelle avant de la remplacer.
+        if (Db.Entry(c).State != EntityState.Detached)
+            Db.Entry(c).Collection(p => p.Niveaux).Load();
+        c.Niveaux.Clear();
+        if (ids.Count > 0)
+            foreach (var n in Db.Niveaux.Where(n => ids.Contains(n.Id)))
+                c.Niveaux.Add(n);
+    }
+
+    protected override Task ValidateAsync(Parcours e, bool modification)
+    {
+        if (string.IsNullOrWhiteSpace(e.Nom))
+            throw new ValidationException("Le nom du parcours est obligatoire.");
+        if (e.FiliereId <= 0)
+            throw new ValidationException("La filière est obligatoire.");
+        if (e.Niveaux.Count == 0)
+            throw new ValidationException("Sélectionnez au moins un niveau pour ce parcours.");
+        return Task.CompletedTask;
+    }
+
+    // On retire d'abord les liens niveaux (table de jointure) avant de supprimer le parcours,
+    // sinon la contrainte de clé étrangère (Restrict) bloque la suppression.
+    public override async Task<IActionResult> Delete(int id)
+    {
+        var p = await Db.Parcours.Include(x => x.Niveaux).FirstOrDefaultAsync(x => x.Id == id);
+        if (p is null) return NotFound();
+
+        p.Niveaux.Clear();
+        Db.Parcours.Remove(p);
+        try
+        {
+            await Db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { message = "Suppression impossible : ce parcours est utilisé par des matières, groupes ou étudiants." });
+        }
+        return NoContent();
+    }
 }
 
 public class BatimentsController(AppDbContext db) : CrudController<Batiment>(db)

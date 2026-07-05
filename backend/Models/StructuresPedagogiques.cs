@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
 namespace EmitGestion.Api.Models;
@@ -43,6 +44,7 @@ public class Niveau
     [JsonIgnore] public ICollection<Matiere> Matieres { get; set; } = new List<Matiere>();
     [JsonIgnore] public ICollection<Etudiant> Etudiants { get; set; } = new List<Etudiant>();
     [JsonIgnore] public ICollection<Groupe> Groupes { get; set; } = new List<Groupe>();
+    [JsonIgnore] public ICollection<Parcours> Parcours { get; set; } = new List<Parcours>();
 }
 
 public class Parcours
@@ -54,6 +56,21 @@ public class Parcours
 
     public int FiliereId { get; set; }
     public Filiere? Filiere { get; set; }
+
+    /// <summary>Niveaux d'études rattachés à ce parcours (relation plusieurs-à-plusieurs).</summary>
+    public ICollection<Niveau> Niveaux { get; set; } = new List<Niveau>();
+
+    /// <summary>
+    /// Identifiants des niveaux : exposés en lecture (calculés depuis <see cref="Niveaux"/>)
+    /// et utilisés en écriture depuis le frontend.
+    /// </summary>
+    [NotMapped]
+    public List<int> NiveauxIds
+    {
+        get => _niveauxIds ?? Niveaux?.Select(n => n.Id).ToList() ?? new List<int>();
+        set => _niveauxIds = value;
+    }
+    private List<int>? _niveauxIds;
 
     [JsonIgnore] public ICollection<Matiere> Matieres { get; set; } = new List<Matiere>();
     [JsonIgnore] public ICollection<Etudiant> Etudiants { get; set; } = new List<Etudiant>();

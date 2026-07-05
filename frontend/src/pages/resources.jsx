@@ -89,7 +89,6 @@ const SearchBar = ({ onSearch, onFilter, filters, columns, placeholder = "Recher
         </div>
       </div>
 
-      {/* Filtres avancés */}
       {showAdvanced && (
         <div className="advanced-filters">
           <div className="filter-row">
@@ -131,7 +130,6 @@ const SearchBar = ({ onSearch, onFilter, filters, columns, placeholder = "Recher
             <button className="btn btn-primary btn-sm">Appliquer</button>
           </div>
 
-          {/* Filtres actifs */}
           <div className="active-filters">
             {Object.entries(activeFilters).map(([key, filter]) => (
               <span key={key} className="filter-tag">
@@ -153,7 +151,6 @@ const useSearchAndFilter = (data, searchKeys, filters = {}) => {
 
     let result = [...data];
 
-    // Application des filtres avancés
     Object.entries(filters).forEach(([key, filter]) => {
       result = result.filter(item => {
         const value = getNestedValue(item, key);
@@ -196,7 +193,7 @@ const useSearchAndFilter = (data, searchKeys, filters = {}) => {
   }, [data, filters]);
 };
 
-// Fonction utilitaire pour accéder aux propriétés imbriquées
+// Fonction utilitaire
 const getNestedValue = (obj, path) => {
   if (!obj || !path) return undefined;
   const parts = path.split('.');
@@ -272,7 +269,7 @@ export function FilieresPage() {
       <CrudResource
         sousTitre="Filières de formation de l'EMIT" 
         endpoint="filieres"
-        libelleAjout="Nouvelle filière" 
+        libelleAjout="Filière" 
         rechercheKeys={['codeFiliere', 'nom']}
         columns={[
           { key: 'codeFiliere', label: 'Code', render: (r) => <span className="badge badge-blue">{r.codeFiliere}</span> },
@@ -306,7 +303,7 @@ export function NiveauxPage() {
       <CrudResource
         sousTitre="Niveaux d'études" 
         endpoint="niveaux"
-        libelleAjout="Nouveau niveau" 
+        libelleAjout="Niveau" 
         rechercheKeys={['nom']}
         columns={[
           { key: 'nom', label: 'Niveau', render: (r) => <strong>{r.nom}</strong> },
@@ -336,18 +333,50 @@ export function ParcoursPage() {
       <CrudResource
         sousTitre="Parcours / spécialités au sein des filières" 
         endpoint="parcours"
-        libelleAjout="Nouveau parcours" 
-        rechercheKeys={['nom', 'filiere.nom']}
+        libelleAjout="Parcours" 
+        rechercheKeys={['nom', 'filiere.nom', 'niveaux.nom']}
         columns={[
           { key: 'nom', label: 'Parcours' },
           { key: 'filiere.nom', label: 'Filière' },
+          { 
+            key: 'niveaux', 
+            label: 'Niveaux', 
+            render: (r) => (
+              <span className="niveaux-tags">
+                {r.niveaux && r.niveaux.length > 0 
+                  ? r.niveaux.map(n => (
+                      <Tag key={n.id} value={n.nom} className="badge-blue" />
+                    ))
+                  : '—'
+                }
+              </span>
+            )
+          },
         ]}
         fields={[
           { name: 'nom', label: 'Nom du parcours', required: true, full: true },
-          { name: 'filiereId', label: 'Filière', type: 'select', ref: 'filieres', optionLabel: nomFiliere, required: true, full: true },
+          { 
+            name: 'filiereId', 
+            label: 'Filière', 
+            type: 'select', 
+            ref: 'filieres', 
+            optionLabel: nomFiliere, 
+            required: true, 
+            full: true 
+          },
+          { 
+            name: 'niveauxIds', 
+            label: 'Niveaux disponibles', 
+            type: 'pills',
+            ref: 'niveaux',
+            optionLabel: (n) => n.nom,
+            required: true,
+            full: true,
+            hint: 'Cliquez sur les niveaux pour les sélectionner/désélectionner'
+          },
         ]}
-        searchPlaceholder="Rechercher par parcours ou filière..."
-        filterableColumns={['nom', 'filiere.nom']}
+        searchPlaceholder="Rechercher par parcours, filière ou niveaux..."
+        filterableColumns={['nom', 'filiere.nom', 'niveaux.nom']}
       />
     </motion.div>
   );
@@ -366,13 +395,25 @@ export function MatieresPage() {
       <CrudResource
         sousTitre="Unités d'enseignement par filière et niveau" 
         endpoint="matieres"
-        libelleAjout="Nouvelle matière" 
+        libelleAjout="Matière" 
         rechercheKeys={['codeMatiere', 'nom']}
         derive={(form, ref) => {
+          const patch = {};
           const niv = (ref.niveaux || []).find((n) => String(n.id) === String(form.niveauId));
           const allowed = SEMESTRES_NIVEAU[niv?.nom] || [];
-          if (form.semestre && !allowed.includes(Number(form.semestre))) return { semestre: '' };
-          return {};
+          if (form.semestre && !allowed.includes(Number(form.semestre))) patch.semestre = '';
+          // Vide le parcours s'il ne correspond plus à la filière/niveau sélectionnés.
+          if (form.parcoursId) {
+            const p = (ref.parcours || []).find((x) => String(x.id) === String(form.parcoursId));
+            const okFiliere = !form.filiereId || (p && String(p.filiereId) === String(form.filiereId));
+            const okNiveau = !form.niveauId || !p || (
+              Array.isArray(p.niveaux) ? p.niveaux.some((n) => String(n.id) === String(form.niveauId))
+              : Array.isArray(p.niveauxIds) ? p.niveauxIds.some((id) => String(id) === String(form.niveauId))
+              : true
+            );
+            if (!p || !okFiliere || !okNiveau) patch.parcoursId = '';
+          }
+          return patch;
         }}
         columns={[
           { key: 'codeMatiere', label: 'Code', render: (r) => <span className="badge badge-blue">{r.codeMatiere}</span> },
@@ -394,7 +435,39 @@ export function MatieresPage() {
           { name: 'semestre', label: 'Semestre', type: 'select', numeric: true, required: true,
             options: (form, ref) => { const niv = (ref.niveaux || []).find((n) => String(n.id) === String(form.niveauId)); return (SEMESTRES_NIVEAU[niv?.nom] || []).map((s) => ({ value: s, label: `S${s}` })); },
             disabled: (form) => !form.niveauId, hint: 'Dépend du niveau choisi.' },
-          { name: 'parcoursId', label: 'Parcours (optionnel)', type: 'select', ref: 'parcours' },
+          {
+            name: 'parcoursId',
+            label: 'Parcours (optionnel)',
+            type: 'select',
+            ref: 'parcours',
+            options: (form, ref) => {
+              const parcours = ref.parcours || [];
+              const filiereId = form.filiereId;
+              const niveauId = form.niveauId;
+
+              let filtered = parcours;
+              if (filiereId) {
+                filtered = filtered.filter(p => String(p.filiereId) === String(filiereId));
+              }
+              if (niveauId && filtered.length > 0) {
+                filtered = filtered.filter(p => {
+                  if (p.niveaux && Array.isArray(p.niveaux)) {
+                    return p.niveaux.some(n => String(n.id) === String(niveauId));
+                  }
+                  if (p.niveauxIds && Array.isArray(p.niveauxIds)) {
+                    return p.niveauxIds.some(id => String(id) === String(niveauId));
+                  }
+                  if (p.niveauId) {
+                    return String(p.niveauId) === String(niveauId);
+                  }
+                  return true;
+                });
+              }
+              return filtered.map(p => ({ value: p.id, label: p.nom }));
+            },
+            disabled: (form) => !form.filiereId || !form.niveauId,
+            hint: 'Seuls les parcours disponibles pour la filière et le niveau sélectionnés sont affichés.'
+          },
         ]}
         searchPlaceholder="Rechercher par code ou intitulé..."
         filterableColumns={['codeMatiere', 'nom', 'filiere.nom', 'niveau.nom', 'semestre', 'coefficient', 'creditsEcts']}
@@ -416,7 +489,7 @@ export function SallesPage() {
       <CrudResource
         sousTitre="Salles, amphithéâtres et studios" 
         endpoint="salles"
-        libelleAjout="Nouvelle salle" 
+        libelleAjout="Salle" 
         rechercheKeys={['nom']}
         columns={[
           { key: 'nom', label: 'Salle', render: (r) => <strong>{r.nom}</strong> },
@@ -450,7 +523,7 @@ export function BatimentsPage() {
       <CrudResource
         sousTitre="Bâtiments de l'école" 
         endpoint="batiments"
-        libelleAjout="Nouveau bâtiment" 
+        libelleAjout="Bâtiment" 
         rechercheKeys={['nom', 'adresse']}
         columns={[
           { key: 'nom', label: 'Bâtiment', render: (r) => <strong>{r.nom}</strong> },
@@ -480,7 +553,7 @@ export function EnseignantsPage() {
       <CrudResource
         sousTitre="Corps enseignant de l'EMIT" 
         endpoint="enseignants"
-        libelleAjout="Nouvel enseignant" 
+        libelleAjout="Enseignant" 
         rechercheKeys={['nom', 'prenoms', 'email']}
         columns={[
           { key: 'nom', label: 'Nom', render: (r) => <strong>{r.nom} {r.prenoms}</strong> },
@@ -515,12 +588,16 @@ export function GroupesPage() {
       <CrudResource
         sousTitre="Groupes d'étudiants par niveau" 
         endpoint="groupes"
-        libelleAjout="Nouveau groupe" 
+        libelleAjout="Groupe" 
         rechercheKeys={['nom']}
         derive={(form, ref) => {
           const niv = (ref.niveaux || []).find((n) => String(n.id) === String(form.niveauId));
           const fil = (ref.filieres || []).find((f) => String(f.id) === String(form.filiereId));
-          if (niv && fil && form.groupeLettre) return { nom: `${niv.nom} ${fil.codeFiliere} ${form.groupeLettre}` };
+          const parc = (ref.parcours || []).find((p) => String(p.id) === String(form.parcoursId));
+          if (niv && fil && form.groupeLettre) {
+            const suffixe = parc ? ` ${parc.nom}` : '';
+            return { nom: `${niv.nom} ${fil.codeFiliere}${suffixe} ${form.groupeLettre}` };
+          }
           return {};
         }}
         columns={[
@@ -532,9 +609,44 @@ export function GroupesPage() {
         fields={[
           { name: 'niveauId', label: 'Niveau', type: 'select', ref: 'niveaux', required: true },
           { name: 'filiereId', label: 'Filière', type: 'select', ref: 'filieres', optionLabel: nomFiliere, required: true },
+          { 
+            name: 'parcoursId', 
+            label: 'Parcours (optionnel)', 
+            type: 'select', 
+            ref: 'parcours',
+            options: (form, ref) => {
+              const parcours = ref.parcours || [];
+              const filiereId = form.filiereId;
+              const niveauId = form.niveauId;
+              
+              let filtered = parcours;
+              if (filiereId) {
+                filtered = filtered.filter(p => String(p.filiereId) === String(filiereId));
+              }
+              if (niveauId && filtered.length > 0) {
+                filtered = filtered.filter(p => {
+                  if (p.niveaux && Array.isArray(p.niveaux)) {
+                    return p.niveaux.some(n => String(n.id) === String(niveauId));
+                  }
+                  if (p.niveauxIds && Array.isArray(p.niveauxIds)) {
+                    return p.niveauxIds.some(id => String(id) === String(niveauId));
+                  }
+                  if (p.niveauId) {
+                    return String(p.niveauId) === String(niveauId);
+                  }
+                  return true;
+                });
+              }
+              return filtered.map(p => ({
+                value: p.id,
+                label: p.nom
+              }));
+            },
+            disabled: (form) => !form.filiereId || !form.niveauId,
+            hint: 'Seuls les parcours disponibles pour cette filière et ce niveau sont affichés.'
+          },
           { name: 'groupeLettre', label: 'Groupe', type: 'select', options: GROUPE_LETTRES, required: true, formOnly: true },
-          { name: 'parcoursId', label: 'Parcours (optionnel)', type: 'select', ref: 'parcours' },
-          { name: 'nom', label: 'Nom du groupe (généré)', readOnly: true, full: true, hint: 'Composé automatiquement : Niveau Code-Filière Groupe (ex : L2 INFO A).' },
+          { name: 'nom', label: 'Nom du groupe (généré)', readOnly: true, full: true, hint: 'Composé automatiquement : Niveau Code-Filière Parcours Groupe (ex : L2 INFO DA2I A).' },
         ]}
         searchPlaceholder="Rechercher un groupe..."
         filterableColumns={['nom', 'filiere.nom', 'niveau.nom', 'parcours.nom']}
@@ -556,12 +668,17 @@ export function EtudiantsPage() {
       <CrudResource
         sousTitre="Étudiants inscrits par filière et niveau" 
         endpoint="etudiants"
-        libelleAjout="Nouvel étudiant" 
+        libelleAjout="Étudiant" 
         rechercheKeys={['matricule', 'nom', 'prenoms', 'email']}
         makeDefaults={(ref) => {
           const l1 = (ref.niveaux || []).find((n) => n.nom === 'L1');
           const active = (ref.anneesacademiques || []).find((a) => a.active);
-          return { niveauId: l1 ? l1.id : '', statut: 'Passant', sexe: 'Masculin', anneeAcademiqueId: active ? active.id : '' };
+          return { 
+            niveauId: l1 ? l1.id : '', 
+            statut: 'Passant', 
+            sexe: 'Masculin', 
+            anneeAcademiqueId: active ? active.id : '' 
+          };
         }}
         derive={(form, ref) => {
           const patch = {};
@@ -601,7 +718,42 @@ export function EtudiantsPage() {
           { name: 'telephone', label: 'Téléphone', mask: 'phone', validate: valTelephone, placeholder: '0331234567' },
           { name: 'filiereId', label: 'Filière', type: 'select', ref: 'filieres', optionLabel: nomFiliere, required: true },
           { name: 'niveauId', label: 'Niveau', type: 'select', ref: 'niveaux', required: true },
-          { name: 'parcoursId', label: 'Parcours (optionnel)', type: 'select', ref: 'parcours' },
+          { 
+            name: 'parcoursId', 
+            label: 'Parcours (optionnel)', 
+            type: 'select', 
+            ref: 'parcours',
+            options: (form, ref) => {
+              const parcours = ref.parcours || [];
+              const filiereId = form.filiereId;
+              const niveauId = form.niveauId;
+              
+              let filtered = parcours;
+              if (filiereId) {
+                filtered = filtered.filter(p => String(p.filiereId) === String(filiereId));
+              }
+              if (niveauId && filtered.length > 0) {
+                filtered = filtered.filter(p => {
+                  if (p.niveaux && Array.isArray(p.niveaux)) {
+                    return p.niveaux.some(n => String(n.id) === String(niveauId));
+                  }
+                  if (p.niveauxIds && Array.isArray(p.niveauxIds)) {
+                    return p.niveauxIds.some(id => String(id) === String(niveauId));
+                  }
+                  if (p.niveauId) {
+                    return String(p.niveauId) === String(niveauId);
+                  }
+                  return true;
+                });
+              }
+              return filtered.map(p => ({
+                value: p.id,
+                label: p.nom
+              }));
+            },
+            disabled: (form) => !form.filiereId || !form.niveauId,
+            hint: 'Seuls les parcours disponibles pour la filière et le niveau sélectionnés sont affichés.'
+          },
           { name: 'statut', label: 'Statut', type: 'select', options: STATUT, required: true },
           { name: 'anneeAcademiqueId', label: 'Année académique', type: 'select', ref: 'anneesacademiques', optionLabel: (a) => a.libelle, hidden: true },
         ]}
@@ -626,7 +778,7 @@ export function DisponibilitesPage() {
         titre="Disponibilités des enseignants"
         sousTitre="Créneaux hebdomadaires (7h–19h) utilisés pour planifier les séances et détecter les conflits"
         endpoint="disponibilites" 
-        libelleAjout="Nouveau créneau" 
+        libelleAjout="Créneau" 
         rechercheKeys={['enseignant.nom', 'enseignant.prenoms']}
         columns={[
           { key: 'enseignant', label: 'Enseignant', render: (r) => <strong>{r.enseignant ? nomPersonne(r.enseignant) : '—'}</strong> },
