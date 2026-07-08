@@ -127,17 +127,25 @@ public class SallesController(AppDbContext db) : CrudController<Salle>(db)
     protected override IQueryable<Salle> Query() => Db.Salles.Include(s => s.Batiment).OrderBy(s => s.Nom);
     protected override void Map(Salle c, Salle s)
     {
-        c.Nom = s.Nom;
+        c.Nom = s.Nom?.Trim() ?? "";
+        c.Numero = s.Numero?.Trim();
         c.Capacite = s.Capacite;
         c.TypeSalle = s.TypeSalle;
         c.BatimentId = s.BatimentId;
     }
-    protected override Task ValidateAsync(Salle e, bool modification)
+    protected override async Task ValidateAsync(Salle e, bool modification)
     {
         if (string.IsNullOrWhiteSpace(e.Nom)) throw new ValidationException("Le nom de la salle est obligatoire.");
+        if (string.IsNullOrWhiteSpace(e.Numero)) throw new ValidationException("Le numéro de la salle est obligatoire.");
         if (e.Capacite < 1) throw new ValidationException("La capacité doit être au moins 1.");
         if (e.BatimentId is null) throw new ValidationException("Le bâtiment est obligatoire.");
-        return Task.CompletedTask;
+
+        // Un même numéro ne peut pas être réutilisé dans le même bâtiment (comparaison insensible à la casse).
+        var numero = e.Numero.Trim().ToLower();
+        var doublon = await Db.Salles.AnyAsync(s =>
+            s.BatimentId == e.BatimentId && s.Numero != null && s.Numero.ToLower() == numero
+            && (!modification || s.Id != e.Id));
+        if (doublon) throw new ValidationException($"Le numéro « {e.Numero.Trim()} » existe déjà dans ce bâtiment.");
     }
 }
 
@@ -147,17 +155,21 @@ public class GroupesController(AppDbContext db) : CrudController<Groupe>(db)
         Db.Groupes.Include(g => g.Filiere).Include(g => g.Niveau).Include(g => g.Parcours).OrderBy(g => g.Nom);
     protected override void Map(Groupe c, Groupe s)
     {
-        c.Nom = s.Nom;
+        c.Nom = s.Nom?.Trim() ?? "";
         c.FiliereId = s.FiliereId;
         c.NiveauId = s.NiveauId;
         c.ParcoursId = s.ParcoursId;
     }
-    protected override Task ValidateAsync(Groupe e, bool modification)
+    protected override async Task ValidateAsync(Groupe e, bool modification)
     {
         if (string.IsNullOrWhiteSpace(e.Nom)) throw new ValidationException("Le nom du groupe est obligatoire.");
         if (e.FiliereId <= 0) throw new ValidationException("La filière est obligatoire.");
         if (e.NiveauId <= 0) throw new ValidationException("Le niveau est obligatoire.");
-        return Task.CompletedTask;
+
+        // Interdit deux groupes portant le même nom (comparaison insensible à la casse).
+        var nom = e.Nom.Trim().ToLower();
+        var doublon = await Db.Groupes.AnyAsync(g => g.Nom.ToLower() == nom && (!modification || g.Id != e.Id));
+        if (doublon) throw new ValidationException($"Un groupe nommé « {e.Nom.Trim()} » existe déjà.");
     }
 }
 
@@ -209,8 +221,8 @@ public class EnseignantsController(AppDbContext db) : CrudController<Enseignant>
     protected override IQueryable<Enseignant> Query() => Db.Enseignants.OrderBy(e => e.Nom);
     protected override void Map(Enseignant c, Enseignant s)
     {
-        c.Nom = s.Nom;
-        c.Prenoms = s.Prenoms;
+        c.Nom = s.Nom?.Trim() ?? "";
+        c.Prenoms = string.IsNullOrWhiteSpace(s.Prenoms) ? null : s.Prenoms.Trim();
         c.Grade = s.Grade;
         c.Email = s.Email?.Trim();
         c.Telephone = s.Telephone?.Trim();
@@ -235,8 +247,8 @@ public class EtudiantsController(AppDbContext db) : CrudController<Etudiant>(db)
     protected override void Map(Etudiant c, Etudiant s)
     {
         c.Matricule = s.Matricule?.Trim().ToUpperInvariant() ?? "";
-        c.Nom = s.Nom;
-        c.Prenoms = s.Prenoms;
+        c.Nom = s.Nom?.Trim() ?? "";
+        c.Prenoms = string.IsNullOrWhiteSpace(s.Prenoms) ? null : s.Prenoms.Trim();
         c.DateNaissance = s.DateNaissance;
         c.Sexe = s.Sexe;
         c.Cin = s.Cin?.Trim();

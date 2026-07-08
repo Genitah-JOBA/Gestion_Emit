@@ -10,8 +10,10 @@ public class Enseignant
     [Required, MaxLength(100)]
     public string Nom { get; set; } = string.Empty;
 
-    [Required, MaxLength(150)]
-    public string Prenoms { get; set; } = string.Empty;
+    // Prénoms facultatif (le formulaire l'indique « optionnel ») : type nullable, sinon
+    // ASP.NET le rend implicitement requis (nullable reference types) et rejette les saisies sans prénom.
+    [MaxLength(150)]
+    public string? Prenoms { get; set; }
 
     public GradeEnseignant Grade { get; set; } = GradeEnseignant.Assistant;
 
@@ -54,8 +56,10 @@ public class Etudiant
     [Required, MaxLength(100)]
     public string Nom { get; set; } = string.Empty;
 
-    [Required, MaxLength(150)]
-    public string Prenoms { get; set; } = string.Empty;
+    // Prénoms facultatif (le formulaire l'indique « optionnel ») : type nullable, sinon
+    // ASP.NET le rend implicitement requis (nullable reference types) et rejette les saisies sans prénom.
+    [MaxLength(150)]
+    public string? Prenoms { get; set; }
 
     public DateOnly? DateNaissance { get; set; }
 

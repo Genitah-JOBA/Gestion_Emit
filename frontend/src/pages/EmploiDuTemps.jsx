@@ -22,6 +22,45 @@ const ajouter = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 const jourNomDe = (dateStr) => (dateStr ? NOMS_JOUR[new Date(dateStr).getDay()] : '');
 const demainIso = () => iso(ajouter(new Date(), 1));
 
+// ---------- Feuille d'impression (format institutionnel) ----------
+const EP_JOURS = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI'];
+const EP_DEBUT = 7;   // première tranche : 7h - 8h
+const EP_NB = 11;     // 11 tranches horaires jusqu'à 18h
+const EP_PALETTE = ['#f4c33f', '#e6a0c4', '#bfe5cc', '#4caf7d', '#5c6e57', '#f6b8a0', '#3f6d84', '#9fb8c4', '#c8b6e2', '#d8c07a'];
+
+// Couleur stable déduite de la matière (même matière => même couleur).
+function couleurMatiere(m) {
+  if (!m) return '#e5e7eb';
+  const s = String(m.id ?? m.nom ?? '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return EP_PALETTE[h % EP_PALETTE.length];
+}
+// Texte noir ou blanc selon la luminosité du fond, pour rester lisible.
+function texteSur(bg) {
+  const c = bg.replace('#', '');
+  const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#1f2937' : '#ffffff';
+}
+
+// Construit, pour un jour, la liste des N tranches : vide / début de séance (avec span) / couverte par un span.
+function colonneDuJour(seancesJour) {
+  const col = Array.from({ length: EP_NB }, () => ({ type: 'vide' }));
+  (seancesJour || []).forEach((s) => {
+    const hd = parseInt(hhmm(s.heureDebut).slice(0, 2), 10);
+    const mf = parseInt(hhmm(s.heureFin).slice(3, 5), 10);
+    const hf = parseInt(hhmm(s.heureFin).slice(0, 2), 10);
+    const debut = Math.max(0, hd - EP_DEBUT);
+    const fin = Math.min(EP_NB, hf - EP_DEBUT + (mf > 0 ? 1 : 0)); // arrondi à l'heure supérieure
+    const span = Math.max(1, fin - debut);
+    if (debut < EP_NB && col[debut].type === 'vide') {
+      col[debut] = { type: 'debut', seance: s, span };
+      for (let r = debut + 1; r < debut + span && r < EP_NB; r++) col[r] = { type: 'couverte' };
+    }
+  });
+  return col;
+}
+
 export default function EmploiDuTemps() {
   const { peutGerer } = useAuth();
   const toast = useToast();
@@ -91,7 +130,6 @@ export default function EmploiDuTemps() {
     <>
       <div className="page-head no-print">
         <div>
-          <h2>Emploi du temps</h2>
           <p>Visualisation par groupe, enseignant ou salle — du {lundi.toLocaleDateString('fr-FR')} au {samedi.toLocaleDateString('fr-FR')}.</p>
         </div>
         {peutGerer && (
@@ -119,13 +157,21 @@ export default function EmploiDuTemps() {
         </button>
       </div>
 
-      <div className="print-title">
-        <strong>Emploi du temps — {cibleNom}</strong><br />
-        Semaine du {lundi.toLocaleDateString('fr-FR')} au {samedi.toLocaleDateString('fr-FR')}
-      </div>
+      {!loading && (
+        <FeuilleImpression
+          vue={vue}
+          cibleNom={cibleNom}
+          groupe={vue === 'groupe' ? listeCible.find((x) => String(x.id) === String(cibleId)) : null}
+          annee={(refs.annees.find((a) => a.active) || refs.annees[0])?.libelle || ''}
+          salles={[...new Set(seances.map((s) => s.salle?.nom).filter(Boolean))]}
+          lundi={lundi}
+          samedi={samedi}
+          parJour={parJour}
+        />
+      )}
 
       {loading ? <Loading /> : (
-        <div className="edt-grid print-zone" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+        <div className="edt-grid no-print" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
           {JOURS.map((j, i) => (
             <div className="cell edt-head" key={`h${i}`}>
               {j}<br /><span style={{ fontWeight: 400, fontSize: 11 }}>{ajouter(lundi, i).getDate()}/{ajouter(lundi, i).getMonth() + 1}</span>
@@ -155,6 +201,75 @@ export default function EmploiDuTemps() {
         <SeanceForm refs={refs} valeur={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); charger(); }} />
       )}
     </>
+  );
+}
+
+// Feuille imprimable : matrice horaires (lignes) × jours (colonnes), au format institutionnel.
+function FeuilleImpression({ vue, cibleNom, groupe, annee, salles, lundi, samedi, parJour }) {
+  const colonnes = EP_JOURS.map((_, i) => colonneDuJour(parJour[i]));
+  const salleAffichee = vue === 'salle' ? cibleNom : salles.join(' / ');
+
+  return (
+    <div className="edt-print" aria-hidden="true">
+      <div className="ep-header">
+        <div className="ep-left">
+          {vue === 'groupe' ? (
+            <>
+              <div>MENTION : {groupe?.filiere?.nom || '—'}</div>
+              <div>PARCOURS : {groupe?.parcours?.nom || 'TRONC COMMUN'}</div>
+              <div>NIVEAU : {groupe?.niveau?.nom || '—'}</div>
+            </>
+          ) : vue === 'enseignant' ? (
+            <div>ENSEIGNANT : {cibleNom}</div>
+          ) : (
+            <div>SALLE : {cibleNom}</div>
+          )}
+        </div>
+        <div className="ep-center">
+          <div className="ep-annee">ANNÉE UNIVERSITAIRE : {annee}</div>
+          <div className="ep-title">EMPLOI DU TEMPS</div>
+          <div className="ep-week">
+            Semaine du {lundi.toLocaleDateString('fr-FR')} au {samedi.toLocaleDateString('fr-FR')}
+          </div>
+        </div>
+        <div className="ep-right">
+          {salleAffichee && <div className="ep-salle">SALLE {salleAffichee}</div>}
+        </div>
+      </div>
+
+      <table className="ep-table">
+        <thead>
+          <tr>
+            <th className="ep-hr">HORAIRES</th>
+            {EP_JOURS.map((j) => <th key={j}>{j}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: EP_NB }).map((_, r) => (
+            <tr key={r}>
+              <th className="ep-hr">{`${EP_DEBUT + r}h00 - ${EP_DEBUT + r + 1}h00`}</th>
+              {colonnes.map((col, ci) => {
+                const cell = col[r];
+                if (cell.type === 'couverte') return null;
+                if (cell.type === 'debut') {
+                  const s = cell.seance;
+                  const bg = couleurMatiere(s.matiere);
+                  return (
+                    <td key={ci} rowSpan={cell.span} className="ep-course" style={{ background: bg, color: texteSur(bg) }}>
+                      <div className="ep-course-nom">{s.matiere?.nom}</div>
+                      {s.enseignant && (
+                        <div className="ep-course-ens">{s.enseignant.nom} {s.enseignant.prenoms || ''}</div>
+                      )}
+                    </td>
+                  );
+                }
+                return <td key={ci} className="ep-empty" />;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

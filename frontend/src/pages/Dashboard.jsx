@@ -56,7 +56,7 @@ export default function Dashboard() {
           gap: 12px;
           margin-bottom: 28px;
           padding: 20px 24px;
-          background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+          background: #ffffff;
           border-radius: 16px;
           border: 1px solid #e2e8f0;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -181,7 +181,7 @@ export default function Dashboard() {
           content: '';
           flex: 1;
           height: 1px;
-          background: linear-gradient(to right, #e2e8f0, transparent);
+          background: #e2e8f0;
         }
 
         /* ===== DISTRIBUTION ROWS ===== */
@@ -217,7 +217,7 @@ export default function Dashboard() {
           display: block;
           height: 100%;
           border-radius: 4px;
-          background: linear-gradient(90deg, #38bdf8, #0284c7);
+          background: #38bdf8;
           transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
@@ -231,7 +231,7 @@ export default function Dashboard() {
 
         /* ===== COULEURS ALTERNATIVES POUR LES BARRES ===== */
         .dist-row .dist-bar.accent span {
-          background: linear-gradient(90deg, #8b5cf6, #6d28d9);
+          background: #8b5cf6;
         }
 
         /* ===== EMPTY STATE ===== */

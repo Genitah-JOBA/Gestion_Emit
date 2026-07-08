@@ -490,21 +490,23 @@ export function SallesPage() {
         sousTitre="Salles, amphithéâtres et studios" 
         endpoint="salles"
         libelleAjout="Salle" 
-        rechercheKeys={['nom']}
+        rechercheKeys={['nom', 'numero']}
         columns={[
+          { key: 'numero', label: 'N°', render: (r) => <Tag value={r.numero || '—'} className="badge-blue" /> },
           { key: 'nom', label: 'Salle', render: (r) => <strong>{r.nom}</strong> },
           { key: 'typeSalle', label: 'Type', render: (r) => <Tag value={r.typeSalle} /> },
           { key: 'capacite', label: 'Capacité', render: (r) => `${r.capacite} places` },
           { key: 'batiment.nom', label: 'Bâtiment', render: (r) => r.batiment?.nom || '—' },
         ]}
         fields={[
+          { name: 'numero', label: 'Numéro', required: true, placeholder: '001', hint: 'Unique au sein du bâtiment (ex : 001, 404).' },
           { name: 'nom', label: 'Nom', required: true, placeholder: 'Amphi A' },
           { name: 'typeSalle', label: 'Type de salle', type: 'select', options: TYPE_SALLE, required: true },
           { name: 'capacite', label: 'Capacité', type: 'number', numeric: true, required: true, min: 1, mask: 'digits' },
           { name: 'batimentId', label: 'Bâtiment', type: 'select', ref: 'batiments', required: true },
         ]}
-        searchPlaceholder="Rechercher une salle..."
-        filterableColumns={['nom', 'typeSalle', 'capacite', 'batiment.nom']}
+        searchPlaceholder="Rechercher par numéro ou nom de salle..."
+        filterableColumns={['numero', 'nom', 'typeSalle', 'capacite', 'batiment.nom']}
       />
     </motion.div>
   );
@@ -593,10 +595,9 @@ export function GroupesPage() {
         derive={(form, ref) => {
           const niv = (ref.niveaux || []).find((n) => String(n.id) === String(form.niveauId));
           const fil = (ref.filieres || []).find((f) => String(f.id) === String(form.filiereId));
-          const parc = (ref.parcours || []).find((p) => String(p.id) === String(form.parcoursId));
           if (niv && fil && form.groupeLettre) {
-            const suffixe = parc ? ` ${parc.nom}` : '';
-            return { nom: `${niv.nom} ${fil.codeFiliere}${suffixe} ${form.groupeLettre}` };
+            // Nom composé : Niveau + Code-Filière + Lettre de groupe (ex : L2 INFO A).
+            return { nom: `${niv.nom} ${fil.codeFiliere} ${form.groupeLettre}` };
           }
           return {};
         }}
@@ -646,7 +647,7 @@ export function GroupesPage() {
             hint: 'Seuls les parcours disponibles pour cette filière et ce niveau sont affichés.'
           },
           { name: 'groupeLettre', label: 'Groupe', type: 'select', options: GROUPE_LETTRES, required: true, formOnly: true },
-          { name: 'nom', label: 'Nom du groupe (généré)', readOnly: true, full: true, hint: 'Composé automatiquement : Niveau Code-Filière Parcours Groupe (ex : L2 INFO DA2I A).' },
+          { name: 'nom', label: 'Nom du groupe (généré)', readOnly: true, full: true, hint: 'Composé automatiquement : Niveau Code-Filière Groupe (ex : L2 INFO A).' },
         ]}
         searchPlaceholder="Rechercher un groupe..."
         filterableColumns={['nom', 'filiere.nom', 'niveau.nom', 'parcours.nom']}

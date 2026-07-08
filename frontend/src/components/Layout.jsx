@@ -158,81 +158,56 @@ export default function Layout() {
           opacity: 1 !important;
         }
 
-        /* ===== BOUTON DÉCONNEXION STYLISÉ ===== */
+        /* ===== BOUTON DÉCONNEXION 3D ===== */
         .logout-btn {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 8px 16px;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          padding: 0;
           border: none;
-          border-radius: 8px;
-          background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
-          color: #ef4444;
-          font-size: 0.8rem;
-          font-weight: 500;
+          border-radius: 12px;
+          background: linear-gradient(180deg, #f87171 0%, #ef4444 100%);
+          color: #fff;
           cursor: pointer;
-          transition: all 0.3s ease;
-          font-family: 'Inter', sans-serif;
-          position: relative;
-          overflow: hidden;
           flex-shrink: 0;
-        }
-
-        .logout-btn::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05));
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .logout-btn:hover::before {
-          opacity: 1;
+          /* Effet 3D : reflet en haut + bord inférieur foncé (épaisseur) + halo coloré */
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.45),
+            0 4px 0 #b91c1c,
+            0 6px 14px rgba(239, 68, 68, 0.40);
+          transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.2s ease;
         }
 
         .logout-btn:hover {
-          transform: translateX(-2px);
-          box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
+          background: linear-gradient(180deg, #fb7185 0%, #f43f5e 100%);
+          transform: translateY(-1px);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.5),
+            0 5px 0 #b91c1c,
+            0 9px 20px rgba(239, 68, 68, 0.50);
         }
 
+        /* Enfoncement : le bouton descend et son épaisseur se réduit. */
         .logout-btn:active {
-          transform: scale(0.95);
-        }
-
-        .logout-btn svg {
-          width: 18px;
-          height: 18px;
-          position: relative;
-          z-index: 1;
-          transition: transform 0.3s ease;
-        }
-
-        .logout-btn:hover svg {
-          transform: translateX(-2px) rotate(-5deg);
-        }
-
-        .logout-btn .logout-text {
-          position: relative;
-          z-index: 1;
+          transform: translateY(4px);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.35),
+            0 1px 0 #b91c1c,
+            0 2px 6px rgba(239, 68, 68, 0.35);
         }
 
         .logout-btn .logout-icon-wrapper {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 28px;
-          height: 28px;
-          border-radius: 6px;
-          background: rgba(239, 68, 68, 0.15);
-          position: relative;
-          z-index: 1;
-          transition: all 0.3s ease;
         }
 
-        .logout-btn:hover .logout-icon-wrapper {
-          background: rgba(239, 68, 68, 0.25);
-          transform: scale(1.05);
+        .logout-btn svg {
+          width: 20px;
+          height: 20px;
+          filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
         }
 
         /* ===== BURGER RESPONSIVE ===== */
@@ -294,21 +269,17 @@ export default function Layout() {
             <div className="user-chip">
               <div className="avatar">{initiales}</div>
               <div className="meta">
-                <strong>{user?.nomComplet}</strong>
                 <span>{user?.role}</span>
               </div>
-              <motion.button
+              <button
                 className="logout-btn"
                 onClick={() => setConfirmLogout(true)}
                 title="Se déconnecter"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
               >
                 <span className="logout-icon-wrapper">
                   <Icon.logout />
                 </span>
-              </motion.button>
+              </button>
             </div>
           </div>
         </aside>

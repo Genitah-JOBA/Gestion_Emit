@@ -140,18 +140,31 @@ table.data tbody tr:hover { background: var(--primary-50); }
 
 /* ---------- Modale ---------- */
 .overlay {
-  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
   display: flex; align-items: flex-start; justify-content: center;
   padding: 5vh 16px; z-index: 100; overflow-y: auto; animation: fade .15s ease;
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  perspective: 1400px;
 }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .modal {
   width: 100%; max-width: 560px; background: var(--surface);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
-  animation: pop .18s ease;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  /* Profondeur 3D : reflet supérieur + ombres empilées de plus en plus diffuses */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 10px 20px -6px rgba(15, 23, 42, 0.20),
+    0 24px 40px -12px rgba(15, 23, 42, 0.35),
+    0 40px 70px -20px rgba(15, 23, 42, 0.30);
+  animation: pop3d .3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .modal.wide { max-width: 720px; }
-@keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+/* Entrée en perspective : la boîte bascule légèrement vers l'avant en apparaissant. */
+@keyframes pop3d {
+  from { opacity: 0; transform: rotateX(-12deg) translateY(26px) scale(.95); }
+  to   { opacity: 1; transform: rotateX(0deg) translateY(0) scale(1); }
+}
 .modal-head { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .modal-body { padding: 22px; }
 .modal-foot { padding: 16px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }

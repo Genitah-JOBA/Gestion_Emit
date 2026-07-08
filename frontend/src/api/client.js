@@ -26,8 +26,16 @@ api.interceptors.response.use(
 );
 
 // Extrait un message d'erreur lisible depuis une réponse Axios.
+// Gère nos erreurs { message } et les ProblemDetails d'ASP.NET { errors, title }.
 export function messageErreur(error, repli = 'Une erreur est survenue.') {
-  return error?.response?.data?.message || error?.message || repli;
+  const data = error?.response?.data;
+  if (data?.message) return data.message;
+  if (data?.errors && typeof data.errors === 'object') {
+    const details = Object.values(data.errors).flat().filter(Boolean);
+    if (details.length) return details.join(' ');
+  }
+  if (data?.title) return data.title;
+  return error?.message || repli;
 }
 
 export default api;
