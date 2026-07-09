@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
 namespace EmitGestion.Api.Models;
@@ -22,6 +23,18 @@ public class Enseignant
 
     [MaxLength(30)]
     public string? Telephone { get; set; }
+
+    /// <summary>Matières enseignées par cet enseignant (relation plusieurs-à-plusieurs).</summary>
+    public ICollection<Matiere> Matieres { get; set; } = new List<Matiere>();
+
+    /// <summary>Identifiants des matières : exposés en lecture et utilisés en écriture depuis le frontend.</summary>
+    [NotMapped]
+    public List<int> MatieresIds
+    {
+        get => _matieresIds ?? Matieres?.Select(m => m.Id).ToList() ?? new List<int>();
+        set => _matieresIds = value;
+    }
+    private List<int>? _matieresIds;
 
     [JsonIgnore] public ICollection<Seance> Seances { get; set; } = new List<Seance>();
     [JsonIgnore] public ICollection<DisponibiliteEnseignant> Disponibilites { get; set; } = new List<DisponibiliteEnseignant>();

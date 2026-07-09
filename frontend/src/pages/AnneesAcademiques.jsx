@@ -53,7 +53,7 @@ export default function AnneesAcademiques() {
   return (
     <>
       <div className="page-head">
-        <div><h2>Années académiques</h2><p>Générées automatiquement (septembre → juillet). Une seule année est active à la fois.</p></div>
+        <div><p>Générées automatiquement (septembre → juillet). Une seule année est active à la fois.</p></div>
         {peutGerer && <button className="btn btn-primary" onClick={genererSuivante} disabled={busy}><Icon.plus width={16} height={16} /> Générer l'année suivante</button>}
       </div>
 

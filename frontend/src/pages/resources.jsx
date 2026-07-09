@@ -556,10 +556,20 @@ export function EnseignantsPage() {
         sousTitre="Corps enseignant de l'EMIT" 
         endpoint="enseignants"
         libelleAjout="Enseignant" 
-        rechercheKeys={['nom', 'prenoms', 'email']}
+        rechercheKeys={['nom', 'prenoms', 'email', 'matieres.nom', 'matieres.codeMatiere']}
         columns={[
           { key: 'nom', label: 'Nom', render: (r) => <strong>{r.nom} {r.prenoms}</strong> },
           { key: 'grade', label: 'Grade', render: (r) => <Tag value={r.grade} /> },
+          {
+            key: 'matieres', label: 'Matières enseignées',
+            render: (r) => (
+              <span className="niveaux-tags">
+                {r.matieres && r.matieres.length > 0
+                  ? r.matieres.map((m) => <Tag key={m.id} value={m.codeMatiere} className="badge-blue" />)
+                  : '—'}
+              </span>
+            ),
+          },
           { key: 'email', label: 'Email', render: (r) => r.email || '—' },
           { key: 'telephone', label: 'Téléphone', render: (r) => r.telephone || '—' },
         ]}
@@ -569,9 +579,14 @@ export function EnseignantsPage() {
           { name: 'grade', label: 'Grade', type: 'select', options: GRADE, required: true },
           { name: 'email', label: 'Email', type: 'email', required: true, validate: valEmail },
           { name: 'telephone', label: 'Téléphone', mask: 'phone', validate: valTelephone, placeholder: '0341234567' },
+          {
+            name: 'matieresIds', label: 'Matières enseignées', type: 'pills',
+            ref: 'matieres', optionLabel: (m) => `${m.codeMatiere} — ${m.nom}`, full: true,
+            hint: 'Cliquez sur les matières enseignées par cet enseignant.',
+          },
         ]}
-        searchPlaceholder="Rechercher par nom, prénom ou email..."
-        filterableColumns={['nom', 'prenoms', 'grade', 'email', 'telephone']}
+        searchPlaceholder="Rechercher par nom, prénom, email ou matière..."
+        filterableColumns={['nom', 'prenoms', 'grade', 'email', 'telephone', 'matieres.nom', 'matieres.codeMatiere']}
       />
     </motion.div>
   );
@@ -776,7 +791,6 @@ export function DisponibilitesPage() {
       transition={pageTransition}
     >
       <CrudResource
-        titre="Disponibilités des enseignants"
         sousTitre="Créneaux hebdomadaires (7h–19h) utilisés pour planifier les séances et détecter les conflits"
         endpoint="disponibilites" 
         libelleAjout="Créneau" 

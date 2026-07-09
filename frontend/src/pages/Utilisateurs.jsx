@@ -59,7 +59,7 @@ export default function Utilisateurs() {
   return (
     <>
       <div className="page-head">
-        <div><h2>Utilisateurs</h2><p>Comptes d'accès et rôles (Admin, Secrétariat, Enseignant).</p></div>
+        <div><p>Comptes d'accès et rôles (Admin, Secrétariat, Enseignant).</p></div>
         <button className="btn btn-primary" onClick={nouveau}><Icon.plus width={16} height={16} /> Nouvel utilisateur</button>
       </div>
 

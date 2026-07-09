@@ -67,6 +67,6 @@ const labelLisible = {
   Amphitheatre: 'Amphithéâtre', SalleDeClasse: 'Salle de classe', SalleDeReunion: 'Salle de réunion',
   SalleDeSoutenance: 'Salle de soutenance', MaitreAssistant: 'Maître-assistant', MaitreDeConferences: 'Maître de conférences',
 };
-export function Tag({ value }) {
-  return <span className={`badge ${badgeMap[value] || ''}`}>{labelLisible[value] || value}</span>;
+export function Tag({ value, className }) {
+  return <span className={`badge ${className || badgeMap[value] || ''}`}>{labelLisible[value] || value}</span>;
 }

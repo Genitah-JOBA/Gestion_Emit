@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import api, { messageErreur } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../lib/toast';
@@ -18,17 +19,48 @@ const lundiDe = (d) => {
 };
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
+// Affichage d'une salle dans l'emploi du temps : « numéro — bâtiment » (repli sur le nom si pas de numéro).
+const labelSalle = (s) => {
+  if (!s) return '';
+  const num = s.numero || s.nom;
+  return s.batiment?.nom ? `${num} — ${s.batiment.nom}` : num;
+};
 const ajouter = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const jourNomDe = (dateStr) => (dateStr ? NOMS_JOUR[new Date(dateStr).getDay()] : '');
 const demainIso = () => iso(ajouter(new Date(), 1));
 
-// ---------- Feuille d'impression (format institutionnel) ----------
+// ---------- Variants d'animation ----------
+const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -20 },
+  transition: { duration: 0.3, ease: 'easeOut' }
+};
+
+const fadeIn = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.25 }
+};
+
+const staggerContainer = {
+  animate: { transition: { staggerChildren: 0.05, delayChildren: 0.1 } }
+};
+
+const eventVariants = {
+  initial: { opacity: 0, scale: 0.95, y: 10 },
+  animate: { opacity: 1, scale: 1, y: 0 },
+  exit: { opacity: 0, scale: 0.95, y: -10 },
+  transition: { duration: 0.2, ease: 'easeOut' }
+};
+
+// ---------- Feuille d'impression ----------
 const EP_JOURS = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI'];
-const EP_DEBUT = 7;   // première tranche : 7h - 8h
-const EP_NB = 11;     // 11 tranches horaires jusqu'à 18h
+const EP_DEBUT = 7;
+const EP_NB = 11;
 const EP_PALETTE = ['#f4c33f', '#e6a0c4', '#bfe5cc', '#4caf7d', '#5c6e57', '#f6b8a0', '#3f6d84', '#9fb8c4', '#c8b6e2', '#d8c07a'];
 
-// Couleur stable déduite de la matière (même matière => même couleur).
 function couleurMatiere(m) {
   if (!m) return '#e5e7eb';
   const s = String(m.id ?? m.nom ?? '');
@@ -36,14 +68,13 @@ function couleurMatiere(m) {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return EP_PALETTE[h % EP_PALETTE.length];
 }
-// Texte noir ou blanc selon la luminosité du fond, pour rester lisible.
+
 function texteSur(bg) {
   const c = bg.replace('#', '');
   const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
   return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#1f2937' : '#ffffff';
 }
 
-// Construit, pour un jour, la liste des N tranches : vide / début de séance (avec span) / couverte par un span.
 function colonneDuJour(seancesJour) {
   const col = Array.from({ length: EP_NB }, () => ({ type: 'vide' }));
   (seancesJour || []).forEach((s) => {
@@ -51,7 +82,7 @@ function colonneDuJour(seancesJour) {
     const mf = parseInt(hhmm(s.heureFin).slice(3, 5), 10);
     const hf = parseInt(hhmm(s.heureFin).slice(0, 2), 10);
     const debut = Math.max(0, hd - EP_DEBUT);
-    const fin = Math.min(EP_NB, hf - EP_DEBUT + (mf > 0 ? 1 : 0)); // arrondi à l'heure supérieure
+    const fin = Math.min(EP_NB, hf - EP_DEBUT + (mf > 0 ? 1 : 0));
     const span = Math.max(1, fin - debut);
     if (debut < EP_NB && col[debut].type === 'vide') {
       col[debut] = { type: 'debut', seance: s, span };
@@ -72,6 +103,8 @@ export default function EmploiDuTemps() {
   const [seances, setSeances] = useState([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState(null);
+  const [genResult, setGenResult] = useState(null);
+  const [genLoading, setGenLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -100,7 +133,25 @@ export default function EmploiDuTemps() {
     }
   }
 
-  useEffect(() => { if (refs) charger(); /* eslint-disable-next-line */ }, [vue, cibleId, lundi, refs]);
+  async function genererAuto() {
+    setGenLoading(true);
+    try {
+      const { data } = await api.post('/seances/generer', null, {
+        params: { groupeId: cibleId, lundi: iso(lundi), dureeMinutes: 120 },
+      });
+      if (!data.propositions.length && data.nonPlacees.length) {
+        toast.error(data.nonPlacees[0]);
+        return;
+      }
+      setGenResult(data);
+    } catch (e) {
+      toast.error(messageErreur(e));
+    } finally {
+      setGenLoading(false);
+    }
+  }
+
+  useEffect(() => { if (refs) charger(); }, [vue, cibleId, lundi, refs]);
 
   useEffect(() => {
     if (!refs) return;
@@ -123,23 +174,36 @@ export default function EmploiDuTemps() {
   if (!refs) return <Loading />;
 
   const listeCible = { groupe: refs.groupes, enseignant: refs.enseignants, salle: refs.salles }[vue];
-  const labelCible = (o) => vue === 'enseignant' ? `${o.nom} ${o.prenoms}` : o.nom;
+  const labelCible = (o) => vue === 'enseignant' ? `${o.nom} ${o.prenoms}` : vue === 'salle' ? labelSalle(o) : o.nom;
   const cibleNom = (() => { const o = listeCible.find((x) => String(x.id) === String(cibleId)); return o ? labelCible(o) : ''; })();
 
   return (
-    <>
+    <motion.div
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={fadeIn}
+    >
       <div className="page-head no-print">
-        <div>
+        <motion.div variants={fadeInUp}>
           <p>Visualisation par groupe, enseignant ou salle — du {lundi.toLocaleDateString('fr-FR')} au {samedi.toLocaleDateString('fr-FR')}.</p>
-        </div>
+        </motion.div>
         {peutGerer && (
-          <button className="btn btn-primary" onClick={() => setForm(nouvelleSeance(lundi))}>
-            <Icon.plus width={16} height={16} /> Planifier une séance
-          </button>
+          <motion.div className="row" style={{ gap: 8 }} variants={fadeInUp}>
+            {vue === 'groupe' && (
+              <button className="btn btn-ghost" onClick={genererAuto} disabled={genLoading || !cibleId}
+                title="Générer automatiquement l'emploi du temps de ce groupe (algorithme d'optimisation)">
+                <Icon.calendar width={16} height={16} /> {genLoading ? 'Génération…' : 'Générer automatiquement'}
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => setForm(nouvelleSeance(lundi))}>
+              <Icon.plus width={16} height={16} /> Planifier une séance
+            </button>
+          </motion.div>
         )}
       </div>
 
-      <div className="toolbar no-print">
+      <motion.div className="toolbar no-print" variants={fadeInUp}>
         <select className="select" style={{ maxWidth: 180 }} value={vue} onChange={(e) => setVue(e.target.value)}>
           <option value="groupe">Par groupe</option>
           <option value="enseignant">Par enseignant</option>
@@ -149,13 +213,40 @@ export default function EmploiDuTemps() {
           {listeCible.map((o) => <option key={o.id} value={o.id}>{labelCible(o)}</option>)}
         </select>
         <div className="spacer" />
-        <button className="btn btn-ghost btn-sm" onClick={() => setLundi(ajouter(lundi, -7))}>‹ Semaine précédente</button>
-        <button className="btn btn-ghost btn-sm" onClick={() => setLundi(lundiDe(new Date()))}>Aujourd'hui</button>
-        <button className="btn btn-ghost btn-sm" onClick={() => setLundi(ajouter(lundi, 7))}>Semaine prochaine ›</button>
-        <button className="btn btn-ghost btn-sm" onClick={() => window.print()} title="Imprimer l'emploi du temps de la semaine">
+        <motion.button 
+          className="btn btn-ghost btn-sm" 
+          onClick={() => setLundi(ajouter(lundi, -7))}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          ‹ Semaine précédente
+        </motion.button>
+        <motion.button 
+          className="btn btn-ghost btn-sm" 
+          onClick={() => setLundi(lundiDe(new Date()))}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          Aujourd'hui
+        </motion.button>
+        <motion.button 
+          className="btn btn-ghost btn-sm" 
+          onClick={() => setLundi(ajouter(lundi, 7))}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          Semaine prochaine ›
+        </motion.button>
+        <motion.button 
+          className="btn btn-ghost btn-sm" 
+          onClick={() => window.print()} 
+          title="Imprimer l'emploi du temps de la semaine"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
           <Icon.print width={15} height={15} /> Imprimer
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
 
       {!loading && (
         <FeuilleImpression
@@ -163,7 +254,7 @@ export default function EmploiDuTemps() {
           cibleNom={cibleNom}
           groupe={vue === 'groupe' ? listeCible.find((x) => String(x.id) === String(cibleId)) : null}
           annee={(refs.annees.find((a) => a.active) || refs.annees[0])?.libelle || ''}
-          salles={[...new Set(seances.map((s) => s.salle?.nom).filter(Boolean))]}
+          salles={[...new Set(seances.map((s) => labelSalle(s.salle)).filter(Boolean))]}
           lundi={lundi}
           samedi={samedi}
           parJour={parJour}
@@ -171,40 +262,220 @@ export default function EmploiDuTemps() {
       )}
 
       {loading ? <Loading /> : (
-        <div className="edt-grid no-print" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+        <motion.div 
+          className="edt-grid no-print" 
+          style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
           {JOURS.map((j, i) => (
-            <div className="cell edt-head" key={`h${i}`}>
+            <motion.div 
+              className="cell edt-head" 
+              key={`h${i}`}
+              variants={fadeInUp}
+            >
               {j}<br /><span style={{ fontWeight: 400, fontSize: 11 }}>{ajouter(lundi, i).getDate()}/{ajouter(lundi, i).getMonth() + 1}</span>
-            </div>
+            </motion.div>
           ))}
           {JOURS.map((j, i) => (
-            <div className="cell" key={`c${i}`} style={{ minHeight: 220 }}>
-              {parJour[i].length === 0 ? <div className="muted" style={{ fontSize: 11, textAlign: 'center', paddingTop: 16 }}>—</div> :
-                parJour[i].map((s) => (
-                  <div key={s.id} className={`edt-event t-${s.typeSeance}`}
-                    onClick={() => peutGerer && setForm(toForm(s))} title={peutGerer ? 'Cliquer pour modifier' : ''}>
-                    <strong>{hhmm(s.heureDebut)}–{hhmm(s.heureFin)}</strong>
-                    <span>{s.matiere?.nom}</span>
-                    <div className="ev-meta">
-                      {vue !== 'enseignant' && s.enseignant && <div>{s.enseignant.nom} {s.enseignant.prenoms}</div>}
-                      {vue !== 'salle' && s.salle && <div>📍 {s.salle.nom}</div>}
-                      {vue !== 'groupe' && s.groupe && <div>👥 {s.groupe.nom}</div>}
-                    </div>
-                  </div>
-                ))}
-            </div>
+            <motion.div 
+              className="cell" 
+              key={`c${i}`} 
+              style={{ minHeight: 220 }}
+              variants={fadeIn}
+            >
+              <AnimatePresence>
+                {parJour[i].length === 0 ? (
+                  <motion.div 
+                    className="muted" 
+                    style={{ fontSize: 11, textAlign: 'center', paddingTop: 16 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    —
+                  </motion.div>
+                ) : (
+                  parJour[i].map((s, idx) => (
+                    <motion.div 
+                      key={s.id} 
+                      className={`edt-event t-${s.typeSeance}`}
+                      onClick={() => peutGerer && setForm(toForm(s))} 
+                      title={peutGerer ? 'Cliquer pour modifier' : ''}
+                      variants={eventVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      transition={{ delay: idx * 0.03 }}
+                      whileHover={{ scale: 1.02, boxShadow: '0 4px 15px rgba(0,0,0,0.12)' }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <strong>{hhmm(s.heureDebut)}–{hhmm(s.heureFin)}</strong>
+                      <span>{s.matiere?.nom}</span>
+                      <div className="ev-meta">
+                        {vue !== 'enseignant' && s.enseignant && <div>{s.enseignant.nom} {s.enseignant.prenoms}</div>}
+                        {vue !== 'salle' && s.salle && <div>📍 {labelSalle(s.salle)}</div>}
+                        {vue !== 'groupe' && s.groupe && <div>👥 {s.groupe.nom}</div>}
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </AnimatePresence>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
-      {form && (
-        <SeanceForm refs={refs} valeur={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); charger(); }} />
-      )}
-    </>
+      <AnimatePresence>
+        {form && (
+          <SeanceForm refs={refs} valeur={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); charger(); }} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {genResult && (
+          <GenerationModal
+            result={genResult}
+            groupeId={cibleId}
+            groupeNom={cibleNom}
+            lundi={lundi}
+            onClose={() => setGenResult(null)}
+            onApplied={() => { setGenResult(null); charger(); }}
+          />
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
-// Feuille imprimable : matrice horaires (lignes) × jours (colonnes), au format institutionnel.
+// Revue de la proposition générée avant application.
+function GenerationModal({ result, groupeId, groupeNom, lundi, onClose, onApplied }) {
+  const toast = useToast();
+  const [recurrent, setRecurrent] = useState(true);
+  const [remplacer, setRemplacer] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function appliquer() {
+    setBusy(true);
+    try {
+      const { data } = await api.post('/seances/appliquer', {
+        groupeId: Number(groupeId),
+        lundi: iso(lundi),
+        recurrent,
+        remplacer,
+        propositions: result.propositions,
+      });
+      toast.success(`${data.creees} séance(s) créée(s)${data.ignorees?.length ? `, ${data.ignorees.length} ignorée(s) pour conflit` : ''}.`);
+      onApplied();
+    } catch (e) {
+      toast.error(messageErreur(e, "Échec de l'application."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      wide
+      title={`Proposition d'emploi du temps — ${groupeNom}`}
+      onClose={onClose}
+      footer={
+        <>
+          <motion.button 
+            className="btn btn-ghost" 
+            onClick={onClose} 
+            disabled={busy}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Annuler
+          </motion.button>
+          <motion.button 
+            className="btn btn-primary" 
+            onClick={appliquer} 
+            disabled={busy || result.propositions.length === 0}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {busy ? 'Application…' : 'Appliquer'}
+          </motion.button>
+        </>
+      }
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <p className="muted" style={{ marginTop: 0 }}>
+          Générée par optimisation sous contraintes (aucun conflit, disponibilités respectées).
+          Rien n'est enregistré tant que vous n'avez pas cliqué sur « Appliquer ».
+        </p>
+
+        <div className="table-wrap" style={{ maxHeight: 320, overflowY: 'auto' }}>
+          <table className="data">
+            <thead>
+              <tr><th>Jour</th><th>Horaire</th><th>Matière</th><th>Enseignant</th><th>Salle</th></tr>
+            </thead>
+            <tbody>
+              <AnimatePresence>
+                {result.propositions.map((p, i) => (
+                  <motion.tr 
+                    key={i}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                  >
+                    <td>{p.jour}</td>
+                    <td className="nowrap">{p.heureDebut} – {p.heureFin}</td>
+                    <td><strong>{p.matiereNom}</strong></td>
+                    <td>{p.enseignantNom}</td>
+                    <td>{p.salleNom}</td>
+                  </motion.tr>
+                ))}
+              </AnimatePresence>
+            </tbody>
+          </table>
+        </div>
+
+        {result.nonPlacees.length > 0 && (
+          <motion.div 
+            className="alert alert-warn" 
+            style={{ marginTop: 12 }}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+          >
+            <strong><Icon.warning width={15} height={15} /> {result.nonPlacees.length} matière(s) non placée(s)</strong>
+            <ul>{result.nonPlacees.map((n, i) => <li key={i}>{n}</li>)}</ul>
+            <div style={{ fontSize: 12 }}>Ajoutez des créneaux de disponibilité, des salles ou des enseignants, puis relancez.</div>
+          </motion.div>
+        )}
+
+        <div className="row" style={{ gap: 18, marginTop: 14, flexWrap: 'wrap' }}>
+          <motion.label 
+            className="row" 
+            style={{ gap: 6, alignItems: 'center', cursor: 'pointer' }}
+            whileHover={{ scale: 1.02 }}
+          >
+            <input type="checkbox" checked={recurrent} onChange={(e) => setRecurrent(e.target.checked)} />
+            <span>Répéter chaque semaine (jusqu'à la fin de l'année)</span>
+          </motion.label>
+          <motion.label 
+            className="row" 
+            style={{ gap: 6, alignItems: 'center', cursor: 'pointer' }}
+            whileHover={{ scale: 1.02 }}
+          >
+            <input type="checkbox" checked={remplacer} onChange={(e) => setRemplacer(e.target.checked)} />
+            <span style={{ color: 'var(--danger)' }}>Remplacer l'emploi du temps existant du groupe</span>
+          </motion.label>
+        </div>
+      </motion.div>
+    </Modal>
+  );
+}
+
+// Feuille imprimable
 function FeuilleImpression({ vue, cibleNom, groupe, annee, salles, lundi, samedi, parJour }) {
   const colonnes = EP_JOURS.map((_, i) => colonneDuJour(parJour[i]));
   const salleAffichee = vue === 'salle' ? cibleNom : salles.join(' / ');
@@ -281,11 +552,9 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
 
   const jour = jourNomDe(f.dateCours);
 
-  // Créneau de disponibilité de l'enseignant pour le jour choisi.
   const creneauDe = (ensId) => refs.dispos.find((d) =>
     String(d.enseignantId) === String(ensId) && d.jourSemaine === jour && d.disponible);
 
-  // Enseignants disponibles le jour de la date sélectionnée.
   const enseignantsDispo = refs.enseignants.filter((e) => !!creneauDe(e.id));
 
   function appliquerHeures(next) {
@@ -299,7 +568,6 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
     setConflits(null);
     setF((s) => {
       const next = { ...s, dateCours: v };
-      // Si l'enseignant n'est plus disponible ce jour-là, on le réinitialise.
       const nj = jourNomDe(v);
       const cr = next.enseignantId && refs.dispos.find((d) => String(d.enseignantId) === String(next.enseignantId) && d.jourSemaine === nj && d.disponible);
       if (!cr) { next.enseignantId = ''; next.heureDebut = ''; next.heureFin = ''; }
@@ -329,7 +597,10 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
   }
 
   async function enregistrer(forcer = false) {
+    if (!f.matiereId) { toast.error('Sélectionnez une matière.'); return; }
     if (!f.enseignantId || !f.heureDebut) { toast.error('Sélectionnez une date puis un enseignant disponible.'); return; }
+    if (!f.salleId) { toast.error('Sélectionnez une salle.'); return; }
+    if (!f.groupeId) { toast.error('Sélectionnez un groupe.'); return; }
     setBusy(true);
     setConflits(null);
     try {
@@ -373,81 +644,179 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
       onClose={onClose}
       footer={
         <>
-          {f.id && <button className="btn btn-danger" onClick={() => supprimer(false)} disabled={busy} style={{ marginRight: 'auto' }}>Supprimer</button>}
-          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Annuler</button>
+          {f.id && (
+            <motion.button 
+              className="btn btn-danger" 
+              onClick={() => supprimer(false)} 
+              disabled={busy} 
+              style={{ marginRight: 'auto' }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              Supprimer
+            </motion.button>
+          )}
+          <motion.button 
+            className="btn btn-ghost" 
+            onClick={onClose} 
+            disabled={busy}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Annuler
+          </motion.button>
           {conflits
-            ? <button className="btn btn-danger" onClick={() => enregistrer(true)} disabled={busy}>Forcer l'enregistrement</button>
-            : <button className="btn btn-primary" onClick={() => enregistrer(false)} disabled={busy}>{busy ? 'Vérification…' : 'Enregistrer'}</button>}
+            ? <motion.button 
+                className="btn btn-danger" 
+                onClick={() => enregistrer(true)} 
+                disabled={busy}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Forcer l'enregistrement
+              </motion.button>
+            : <motion.button 
+                className="btn btn-primary" 
+                onClick={() => enregistrer(false)} 
+                disabled={busy}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                {busy ? 'Vérification…' : 'Enregistrer'}
+              </motion.button>
+          }
         </>
       }
     >
-      {conflits && (
-        <div className="alert alert-warn">
-          <strong><Icon.warning width={15} height={15} /> Conflit(s) détecté(s)</strong>
-          <ul>{conflits.map((c, i) => <li key={i}>{c.message}</li>)}</ul>
-          <div style={{ marginTop: 6, fontSize: 12 }}>Corrigez les informations ou forcez l'enregistrement.</div>
-        </div>
-      )}
-
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <Field label="Matière" required>
-            <select className="select" value={f.matiereId} onChange={(e) => set('matiereId', e.target.value)} required>
-              <option value="">— Sélectionner —</option>
-              {refs.matieres.map((m) => <option key={m.id} value={m.id}>{m.codeMatiere} — {m.nom}</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <Field label="Date" required hint={!f.id ? 'Au moins demain. La séance se répète chaque semaine.' : 'Au moins demain.'}>
-          <input className="input" type="date" min={demainIso()} value={f.dateCours} onChange={(e) => setDate(e.target.value)} required />
-        </Field>
-        <Field label="Type" required>
-          <select className="select" value={f.typeSeance} onChange={(e) => set('typeSeance', e.target.value)}>
-            {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </Field>
-
-        <Field label="Enseignant (disponible ce jour)" required hint={f.dateCours ? `${enseignantsDispo.length} disponible(s) le ${jour}.` : 'Choisissez d\'abord la date.'}>
-          <select className="select" value={f.enseignantId} onChange={(e) => setEnseignant(e.target.value)} disabled={!f.dateCours} required>
-            <option value="">— Sélectionner —</option>
-            {enseignantsDispo.map((o) => <option key={o.id} value={o.id}>{o.nom} {o.prenoms}</option>)}
-          </select>
-        </Field>
-        <Field label="Horaire (selon disponibilité)" hint="Déterminé automatiquement par l'enseignant.">
-          <input className="input" type="text" readOnly value={f.heureDebut && f.heureFin ? `${f.heureDebut} – ${f.heureFin}` : '—'} />
-        </Field>
-
-        <Field label="Salle" required>
-          <select className="select" value={f.salleId} onChange={(e) => set('salleId', e.target.value)} required>
-            <option value="">— Sélectionner —</option>
-            {refs.salles.map((o) => <option key={o.id} value={o.id}>{o.nom} ({o.capacite} pl.)</option>)}
-          </select>
-        </Field>
-        <Field label="Nom du groupe" required>
-          <select className="select" value={f.groupeId} onChange={(e) => set('groupeId', e.target.value)} required>
-            <option value="">— Sélectionner —</option>
-            {refs.groupes.map((o) => <option key={o.id} value={o.id}>{o.nom}</option>)}
-          </select>
-        </Field>
-
-        {!f.id && (
-          <Field label="Fin de la répétition (optionnel)" hint="Sans date, la séance se répète jusqu'à la fin de l'année académique.">
-            <input className="input" type="date" min={f.dateCours || demainIso()} value={f.dateFin || ''} onChange={(e) => set('dateFin', e.target.value)} />
-          </Field>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        {conflits && (
+          <motion.div 
+            className="alert alert-warn"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+          >
+            <strong><Icon.warning width={15} height={15} /> Conflit(s) détecté(s)</strong>
+            <ul>{conflits.map((c, i) => <li key={i}>{c.message}</li>)}</ul>
+            <div style={{ marginTop: 6, fontSize: 12 }}>Corrigez les informations ou forcez l'enregistrement.</div>
+          </motion.div>
         )}
-        {f.id && (
-          <Field label="Fin de série après le (optionnel)" hint="Supprime les occurrences suivantes de la même série.">
-            <input className="input" type="date" value={f.finSerie || ''} onChange={(e) => set('finSerie', e.target.value)} />
-          </Field>
-        )}
-      </div>
+
+        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <motion.div 
+            style={{ gridColumn: '1 / -1' }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+          >
+            <Field label="Matière" required>
+              <select className="select" value={f.matiereId} onChange={(e) => set('matiereId', e.target.value)} required>
+                <option value="">— Sélectionner —</option>
+                {refs.matieres.map((m) => <option key={m.id} value={m.id}>{m.codeMatiere} — {m.nom}</option>)}
+              </select>
+            </Field>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Field label="Date" required hint={!f.id ? 'Au moins demain. La séance se répète chaque semaine.' : 'Au moins demain.'}>
+              <input className="input" type="date" min={demainIso()} value={f.dateCours} onChange={(e) => setDate(e.target.value)} required />
+            </Field>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <Field label="Type" required>
+              <select className="select" value={f.typeSeance} onChange={(e) => set('typeSeance', e.target.value)}>
+                {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Field label="Enseignant (disponible ce jour)" required hint={f.dateCours ? `${enseignantsDispo.length} disponible(s) le ${jour}.` : 'Choisissez d\'abord la date.'}>
+              <select className="select" value={f.enseignantId} onChange={(e) => setEnseignant(e.target.value)} disabled={!f.dateCours} required>
+                <option value="">— Sélectionner —</option>
+                {enseignantsDispo.map((o) => <option key={o.id} value={o.id}>{o.nom} {o.prenoms}</option>)}
+              </select>
+            </Field>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+          >
+            <Field label="Horaire (selon disponibilité)" hint="Déterminé automatiquement par l'enseignant.">
+              <input className="input" type="text" readOnly value={f.heureDebut && f.heureFin ? `${f.heureDebut} – ${f.heureFin}` : '—'} />
+            </Field>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Field label="Salle" required>
+              <select className="select" value={f.salleId} onChange={(e) => set('salleId', e.target.value)} required>
+                <option value="">— Sélectionner —</option>
+                {refs.salles.map((o) => <option key={o.id} value={o.id}>{labelSalle(o)} ({o.capacite} pl.)</option>)}
+              </select>
+            </Field>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+          >
+            <Field label="Nom du groupe" required>
+              <select className="select" value={f.groupeId} onChange={(e) => set('groupeId', e.target.value)} required>
+                <option value="">— Sélectionner —</option>
+                {refs.groupes.map((o) => <option key={o.id} value={o.id}>{o.nom}</option>)}
+              </select>
+            </Field>
+          </motion.div>
+
+          {!f.id && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Field label="Fin de la répétition (optionnel)" hint="Sans date, la séance se répète jusqu'à la fin de l'année académique.">
+                <input className="input" type="date" min={f.dateCours || demainIso()} value={f.dateFin || ''} onChange={(e) => set('dateFin', e.target.value)} />
+              </Field>
+            </motion.div>
+          )}
+          {f.id && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Field label="Fin de série après le (optionnel)" hint="Supprime les occurrences suivantes de la même série.">
+                <input className="input" type="date" value={f.finSerie || ''} onChange={(e) => set('finSerie', e.target.value)} />
+              </Field>
+            </motion.div>
+          )}
+        </div>
+      </motion.div>
     </Modal>
   );
 }
 
 function nouvelleSeance(lundi) {
-  // Première date proposée : au moins demain.
   const base = ajouter(new Date(), 1);
   const d = base > lundi ? base : lundi;
   return {

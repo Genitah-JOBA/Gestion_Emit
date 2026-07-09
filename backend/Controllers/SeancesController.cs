@@ -11,7 +11,7 @@ namespace EmitGestion.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class SeancesController(AppDbContext db, SeanceService service) : ControllerBase
+public class SeancesController(AppDbContext db, SeanceService service, PlanificateurService planificateur) : ControllerBase
 {
     private IQueryable<Seance> Base() =>
         db.Seances
@@ -60,6 +60,75 @@ public class SeancesController(AppDbContext db, SeanceService service) : Control
         => await service.VerifierAsync(input, exclureId);
 
     /// <summary>
+    /// Génère automatiquement une proposition d'emploi du temps pour un groupe et une semaine
+    /// (algorithme d'optimisation sous contraintes). Rien n'est enregistré : la proposition est
+    /// renvoyée pour revue avant application via <c>appliquer</c>.
+    /// </summary>
+    [HttpPost("generer")]
+    [Authorize(Roles = Roles.Gestion)]
+    public async Task<ActionResult<ResultatGeneration>> Generer(
+        [FromQuery] int groupeId, [FromQuery] DateOnly lundi, [FromQuery] int dureeMinutes = 120)
+    {
+        try { return await planificateur.GenererAsync(groupeId, lundi, dureeMinutes); }
+        catch (ValidationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>Applique une proposition générée : crée les séances (récurrentes ou non), en ignorant les conflits.</summary>
+    [HttpPost("appliquer")]
+    [Authorize(Roles = Roles.Gestion)]
+    public async Task<ActionResult> Appliquer([FromBody] AppliquerGenerationRequest req)
+    {
+        var groupe = await db.Groupes.FindAsync(req.GroupeId);
+        if (groupe is null) return NotFound(new { message = "Groupe introuvable." });
+
+        var demain = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
+
+        // Option « refaire » : on efface l'emploi du temps futur du groupe avant de reconstruire.
+        if (req.Remplacer)
+            await db.Seances.Where(s => s.GroupeId == req.GroupeId && s.DateCours >= req.Lundi).ExecuteDeleteAsync();
+
+        var creees = 0;
+        var ignorees = new List<string>();
+
+        foreach (var p in req.Propositions)
+        {
+            var jour = Enum.Parse<JourSemaine>(p.Jour);
+            var date = req.Lundi.AddDays((int)jour - 1);
+            while (date < demain) date = date.AddDays(7); // première occurrence au plus tôt demain
+
+            var annee = await AnneeAcademiqueHelper.PourDateAsync(db, date);
+            if (annee is null) { ignorees.Add($"{p.MatiereNom} ({p.Jour}) : aucune année académique ne couvre cette date."); continue; }
+
+            var serie = req.Recurrent ? Guid.NewGuid() : (Guid?)null;
+            var horizon = req.Recurrent ? annee.DateFin : date;
+            if (horizon < date) horizon = date;
+            var deb = TimeOnly.Parse(p.HeureDebut);
+            var fin = TimeOnly.Parse(p.HeureFin);
+            var placee = false;
+
+            for (var d = date; d <= horizon; d = d.AddDays(7))
+            {
+                var occ = new Seance
+                {
+                    DateCours = d, HeureDebut = deb, HeureFin = fin, TypeSeance = p.TypeSeance,
+                    MatiereId = p.MatiereId, EnseignantId = p.EnseignantId, SalleId = p.SalleId,
+                    GroupeId = req.GroupeId, AnneeAcademiqueId = annee.Id, SerieId = serie,
+                };
+                var v = await service.VerifierAsync(occ);
+                if (!v.Ok) continue; // on ignore les semaines en conflit
+                db.Seances.Add(occ);
+                creees++;
+                placee = true;
+                if (!req.Recurrent) break;
+            }
+            if (!placee) ignorees.Add($"{p.MatiereNom} ({p.Jour} {p.HeureDebut}) : conflit non résolu.");
+        }
+
+        await db.SaveChangesAsync();
+        return Ok(new { creees, ignorees });
+    }
+
+    /// <summary>
     /// Crée une séance. Par défaut récurrente chaque semaine : génère une occurrence par semaine
     /// depuis la date de cours jusqu'à <paramref name="dateFin"/> (ou la fin de l'année académique).
     /// </summary>
@@ -71,6 +140,9 @@ public class SeancesController(AppDbContext db, SeanceService service) : Control
         var demain = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
         if (input.DateCours < demain)
             return BadRequest(new { message = "La date de la séance doit être au minimum demain (au moins un jour à l'avance)." });
+
+        if (await ValiderReferencesAsync(input) is string erreur)
+            return BadRequest(new { message = erreur });
 
         var annee = await AnneeAcademiqueHelper.PourDateAsync(db, input.DateCours);
         if (annee is null)
@@ -110,6 +182,9 @@ public class SeancesController(AppDbContext db, SeanceService service) : Control
         var existant = await db.Seances.FindAsync(id);
         if (existant is null) return NotFound();
 
+        if (await ValiderReferencesAsync(input) is string erreur)
+            return BadRequest(new { message = erreur });
+
         var annee = await AnneeAcademiqueHelper.PourDateAsync(db, input.DateCours);
         if (annee is not null) input.AnneeAcademiqueId = annee.Id;
 
@@ -144,6 +219,20 @@ public class SeancesController(AppDbContext db, SeanceService service) : Control
 
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// <summary>Vérifie que les entités liées (matière, enseignant, salle, groupe) sont bien sélectionnées et existent.</summary>
+    private async Task<string?> ValiderReferencesAsync(Seance s)
+    {
+        if (s.MatiereId <= 0 || !await db.Matieres.AnyAsync(x => x.Id == s.MatiereId))
+            return "Veuillez sélectionner une matière.";
+        if (s.EnseignantId <= 0 || !await db.Enseignants.AnyAsync(x => x.Id == s.EnseignantId))
+            return "Veuillez sélectionner un enseignant.";
+        if (s.SalleId <= 0 || !await db.Salles.AnyAsync(x => x.Id == s.SalleId))
+            return "Veuillez sélectionner une salle.";
+        if (s.GroupeId <= 0 || !await db.Groupes.AnyAsync(x => x.Id == s.GroupeId))
+            return "Veuillez sélectionner un groupe.";
+        return null;
     }
 
     private static Seance Cloner(Seance src, DateOnly date, int anneeId, Guid? serie) => new()

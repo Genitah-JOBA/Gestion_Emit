@@ -18,6 +18,7 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 // ---------- Services applicatifs ----------
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddScoped<SeanceService>();
+builder.Services.AddScoped<PlanificateurService>();
 
 // ---------- Contrôleurs + JSON ----------
 builder.Services.AddControllers().AddJsonOptions(o =>

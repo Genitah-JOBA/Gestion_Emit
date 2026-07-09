@@ -218,7 +218,7 @@ public class MatieresController(AppDbContext db) : CrudController<Matiere>(db)
 
 public class EnseignantsController(AppDbContext db) : CrudController<Enseignant>(db)
 {
-    protected override IQueryable<Enseignant> Query() => Db.Enseignants.OrderBy(e => e.Nom);
+    protected override IQueryable<Enseignant> Query() => Db.Enseignants.Include(e => e.Matieres).OrderBy(e => e.Nom);
     protected override void Map(Enseignant c, Enseignant s)
     {
         c.Nom = s.Nom?.Trim() ?? "";
@@ -226,6 +226,15 @@ public class EnseignantsController(AppDbContext db) : CrudController<Enseignant>
         c.Grade = s.Grade;
         c.Email = s.Email?.Trim();
         c.Telephone = s.Telephone?.Trim();
+
+        // Matières enseignées (relation plusieurs-à-plusieurs).
+        var ids = (s.MatieresIds ?? new List<int>()).Distinct().ToList();
+        if (Db.Entry(c).State != EntityState.Detached)
+            Db.Entry(c).Collection(x => x.Matieres).Load();
+        c.Matieres.Clear();
+        if (ids.Count > 0)
+            foreach (var m in Db.Matieres.Where(m => ids.Contains(m.Id)))
+                c.Matieres.Add(m);
     }
     protected override async Task ValidateAsync(Enseignant e, bool modification)
     {
@@ -235,6 +244,25 @@ public class EnseignantsController(AppDbContext db) : CrudController<Enseignant>
         if (!string.IsNullOrWhiteSpace(e.Telephone) && !Validations.TelephoneValide(e.Telephone))
             throw new ValidationException("Le téléphone doit comporter 10 chiffres et commencer par 032, 033, 034, 037 ou 038.");
         await UniciteContact.VerifierAsync(Db, e.Email, e.Telephone, enseignantIdExclu: modification ? e.Id : null);
+    }
+
+    // On retire d'abord les liens matières avant de supprimer l'enseignant (contrainte FK Restrict).
+    public override async Task<IActionResult> Delete(int id)
+    {
+        var e = await Db.Enseignants.Include(x => x.Matieres).FirstOrDefaultAsync(x => x.Id == id);
+        if (e is null) return NotFound();
+
+        e.Matieres.Clear();
+        Db.Enseignants.Remove(e);
+        try
+        {
+            await Db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { message = "Suppression impossible : cet enseignant est référencé par des séances ou des disponibilités." });
+        }
+        return NoContent();
     }
 }
 

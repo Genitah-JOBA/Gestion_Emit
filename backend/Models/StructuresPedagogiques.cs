@@ -104,4 +104,5 @@ public class Matiere
     public Parcours? Parcours { get; set; }
 
     [JsonIgnore] public ICollection<Seance> Seances { get; set; } = new List<Seance>();
+    [JsonIgnore] public ICollection<Enseignant> Enseignants { get; set; } = new List<Enseignant>();
 }

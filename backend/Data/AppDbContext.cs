@@ -39,6 +39,12 @@ public class AppDbContext : DbContext
             .WithMany(n => n.Parcours)
             .UsingEntity(j => j.ToTable("ParcoursNiveaux"));
 
+        // Relation plusieurs-à-plusieurs Enseignant <-> Matiere (table de jointure EnseignantMatieres).
+        b.Entity<Enseignant>()
+            .HasMany(e => e.Matieres)
+            .WithMany(m => m.Enseignants)
+            .UsingEntity(j => j.ToTable("EnseignantMatieres"));
+
         // On évite les suppressions en cascade destructrices : restriction par défaut.
         foreach (var fk in b.Model.GetEntityTypes().SelectMany(t => t.GetForeignKeys()))
         {

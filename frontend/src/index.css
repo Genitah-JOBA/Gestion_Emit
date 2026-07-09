@@ -184,13 +184,39 @@ table.data tbody tr:hover { background: var(--primary-50); }
 
 /* ----- Impression de l'emploi du temps ----- */
 .print-title { display: none; }
+
+/* Feuille imprimable (format institutionnel) — masquée à l'écran, affichée à l'impression. */
+.edt-print { display: none; color: #000; }
+.edt-print .ep-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
+.edt-print .ep-left div { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 4px; }
+.edt-print .ep-center { flex: 1; text-align: center; }
+.edt-print .ep-annee { font-weight: 700; font-size: 12px; }
+.edt-print .ep-title { font-weight: 800; font-size: 19px; letter-spacing: 1px; margin-top: 8px; }
+.edt-print .ep-week { font-size: 10px; color: #444; margin-top: 3px; }
+.edt-print .ep-right { min-width: 110px; text-align: right; }
+.edt-print .ep-salle {
+  display: inline-block; background: #2b5a86; color: #fff; font-weight: 700;
+  font-size: 13px; letter-spacing: .5px; padding: 7px 16px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.edt-print .ep-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.edt-print .ep-table th,
+.edt-print .ep-table td { border: 1px solid #111; padding: 3px; font-size: 11px; text-align: center; vertical-align: middle; }
+.edt-print .ep-table thead th { font-weight: 700; text-transform: uppercase; height: 28px; background: #fff; }
+.edt-print .ep-hr { font-weight: 600; white-space: nowrap; width: 92px; }
+.edt-print .ep-empty { height: 40px; }
+.edt-print .ep-course {
+  padding: 4px; line-height: 1.25;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.edt-print .ep-course-nom { font-weight: 700; font-size: 11.5px; }
+.edt-print .ep-course-ens { font-size: 10px; margin-top: 3px; font-style: italic; }
+
 @media print {
-  .sidebar, .topbar, .toolbar, .no-print, .burger, .scrim, .page-head { display: none !important; }
+  .sidebar, .topbar, .toolbar, .no-print, .burger, .scrim, .page-head,
+  .edt-grid, .print-title { display: none !important; }
   .app-shell, .main, .content { display: block !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
-  .print-title { display: block; text-align: center; margin: 0 0 10px; font-size: 14px; color: #000; }
-  .edt-grid { gap: 2px; }
-  .edt-event { break-inside: avoid; box-shadow: none !important; }
-  .cell { border-color: #bbb !important; }
+  .edt-print { display: block !important; }
   @page { size: A4 landscape; margin: 10mm; }
 }
 
