@@ -18,6 +18,8 @@ public class AppDbContext : DbContext
     public DbSet<Etudiant> Etudiants => Set<Etudiant>();
     public DbSet<AnneeAcademique> AnneesAcademiques => Set<AnneeAcademique>();
     public DbSet<Seance> Seances => Set<Seance>();
+    public DbSet<Examen> Examens => Set<Examen>();
+    public DbSet<ExamenSalle> ExamenSalles => Set<ExamenSalle>();
     public DbSet<DisponibiliteEnseignant> Disponibilites => Set<DisponibiliteEnseignant>();
     public DbSet<Utilisateur> Utilisateurs => Set<Utilisateur>();
 
@@ -58,5 +60,19 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(u => u.EnseignantId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // Un groupe supprimé n'efface pas les étudiants : leur groupe est simplement remis à vide.
+        b.Entity<Etudiant>()
+            .HasOne(e => e.Groupe)
+            .WithMany(g => g.Etudiants)
+            .HasForeignKey(e => e.GroupeId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Supprimer un examen supprime ses salles/surveillants associés.
+        b.Entity<ExamenSalle>()
+            .HasOne(es => es.Examen)
+            .WithMany(e => e.Salles)
+            .HasForeignKey(es => es.ExamenId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

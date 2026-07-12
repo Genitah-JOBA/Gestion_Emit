@@ -3,6 +3,7 @@ using System;
 using EmitGestion.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EmitGestion.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260711163152_Etudiant_Groupe")]
+    partial class Etudiant_Groupe
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -60,6 +63,10 @@ namespace EmitGestion.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Adresse")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
                     b.Property<string>("Nom")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -81,12 +88,6 @@ namespace EmitGestion.Api.Migrations
                     b.Property<string>("Commentaire")
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
-
-                    b.Property<DateOnly?>("DateDebut")
-                        .HasColumnType("date");
-
-                    b.Property<DateOnly?>("DateFin")
-                        .HasColumnType("date");
 
                     b.Property<bool>("Disponible")
                         .HasColumnType("boolean");
@@ -217,87 +218,6 @@ namespace EmitGestion.Api.Migrations
                     b.HasIndex("ParcoursId");
 
                     b.ToTable("Etudiants");
-                });
-
-            modelBuilder.Entity("EmitGestion.Api.Models.Examen", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AnneeAcademiqueId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ChefScolarite")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("date");
-
-                    b.Property<int>("EnseignantId")
-                        .HasColumnType("integer");
-
-                    b.Property<TimeOnly>("HeureDebut")
-                        .HasColumnType("time without time zone");
-
-                    b.Property<TimeOnly>("HeureFin")
-                        .HasColumnType("time without time zone");
-
-                    b.Property<int>("MatiereId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Session")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AnneeAcademiqueId");
-
-                    b.HasIndex("EnseignantId");
-
-                    b.HasIndex("MatiereId");
-
-                    b.ToTable("Examens");
-                });
-
-            modelBuilder.Entity("EmitGestion.Api.Models.ExamenSalle", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("ExamenId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SalleId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Surveillant1")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<string>("Surveillant2")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<string>("Surveillant3")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExamenId");
-
-                    b.HasIndex("SalleId");
-
-                    b.ToTable("ExamenSalles");
                 });
 
             modelBuilder.Entity("EmitGestion.Api.Models.Filiere", b =>
@@ -682,52 +602,6 @@ namespace EmitGestion.Api.Migrations
                     b.Navigation("Parcours");
                 });
 
-            modelBuilder.Entity("EmitGestion.Api.Models.Examen", b =>
-                {
-                    b.HasOne("EmitGestion.Api.Models.AnneeAcademique", "AnneeAcademique")
-                        .WithMany()
-                        .HasForeignKey("AnneeAcademiqueId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EmitGestion.Api.Models.Enseignant", "Enseignant")
-                        .WithMany()
-                        .HasForeignKey("EnseignantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EmitGestion.Api.Models.Matiere", "Matiere")
-                        .WithMany()
-                        .HasForeignKey("MatiereId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AnneeAcademique");
-
-                    b.Navigation("Enseignant");
-
-                    b.Navigation("Matiere");
-                });
-
-            modelBuilder.Entity("EmitGestion.Api.Models.ExamenSalle", b =>
-                {
-                    b.HasOne("EmitGestion.Api.Models.Examen", "Examen")
-                        .WithMany("Salles")
-                        .HasForeignKey("ExamenId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("EmitGestion.Api.Models.Salle", "Salle")
-                        .WithMany()
-                        .HasForeignKey("SalleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Examen");
-
-                    b.Navigation("Salle");
-                });
-
             modelBuilder.Entity("EmitGestion.Api.Models.Groupe", b =>
                 {
                     b.HasOne("EmitGestion.Api.Models.Filiere", "Filiere")
@@ -898,11 +772,6 @@ namespace EmitGestion.Api.Migrations
                     b.Navigation("Disponibilites");
 
                     b.Navigation("Seances");
-                });
-
-            modelBuilder.Entity("EmitGestion.Api.Models.Examen", b =>
-                {
-                    b.Navigation("Salles");
                 });
 
             modelBuilder.Entity("EmitGestion.Api.Models.Filiere", b =>

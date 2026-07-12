@@ -64,6 +64,9 @@ public class PlanificateurService(AppDbContext db)
         var existantes = await db.Seances
             .Where(s => s.DateCours >= lundi && s.DateCours <= samedi).ToListAsync();
 
+        // Effectif du groupe : nombre d'étudiants qui y sont rattachés (0 = pas de contrainte de taille).
+        var effectif = await db.Etudiants.CountAsync(e => e.GroupeId == groupeId);
+
         if (matieres.Count == 0)
             return new ResultatGeneration([], ["Aucune matière n'est définie pour la filière et le niveau de ce groupe."]);
         if (enseignants.Count == 0 || salles.Count == 0)
@@ -105,9 +108,12 @@ public class PlanificateurService(AppDbContext db)
         bool GroupeLibre(int jour, TimeOnly d, TimeOnly f)
             => !(occGroupe.TryGetValue(jour, out var l) && l.Any(iv => Chevauche(d, f, iv.Item1, iv.Item2)));
 
-        bool EnseignantDisponible(int ensId, JourSemaine jour, TimeOnly d, TimeOnly f)
+        bool EnseignantDisponible(int ensId, JourSemaine jour, DateOnly date, TimeOnly d, TimeOnly f)
         {
-            var duJour = dispos.Where(x => x.EnseignantId == ensId && x.JourSemaine == jour).ToList();
+            // Seuls les créneaux dont la période de validité couvre la date de la séance comptent.
+            var duJour = dispos.Where(x => x.EnseignantId == ensId && x.JourSemaine == jour
+                && (x.DateDebut == null || x.DateDebut <= date)
+                && (x.DateFin == null || x.DateFin >= date)).ToList();
             if (duJour.Count == 0) return true; // aucune contrainte déclarée
             if (duJour.Any(x => !x.Disponible && Chevauche(d, f, x.HeureDebut, x.HeureFin))) return false;
             var creneaux = duJour.Where(x => x.Disponible).ToList();
@@ -130,9 +136,10 @@ public class PlanificateurService(AppDbContext db)
                     foreach (var ens in candidatsEns)
                     {
                         if (!Libre(occEns, ens.Id, jour, deb, fin)) continue;
-                        if (!EnseignantDisponible(ens.Id, (JourSemaine)jour, deb, fin)) continue;
+                        if (!EnseignantDisponible(ens.Id, (JourSemaine)jour, lundi.AddDays(jour - 1), deb, fin)) continue;
                         foreach (var salle in salles)
                         {
+                            if (effectif > 0 && salle.Capacite < effectif) continue;                    // salle trop petite pour l'effectif
                             if (!Libre(occSalle, salle.Id, jour, deb, fin)) continue;
 
                             double score = 0;
@@ -142,6 +149,7 @@ public class PlanificateurService(AppDbContext db)
                             score -= charge * 3;                                                        // répartir sur la semaine
                             if (occGroupe.TryGetValue(jour, out var lj2)
                                 && lj2.Any(iv => iv.Item2 == deb || iv.Item1 == fin)) score += 5;       // journée compacte
+                            score -= salle.Capacite * 0.05;                                             // préfère la plus petite salle qui suffit
 
                             res.Add(new Candidat(jour, deb, fin, ens.Id, salle.Id, score));
                         }

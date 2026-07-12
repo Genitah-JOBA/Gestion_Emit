@@ -66,6 +66,13 @@ public class DisponibiliteEnseignant
     public TimeOnly HeureDebut { get; set; }
     public TimeOnly HeureFin { get; set; }
 
+    /// <summary>
+    /// Période de validité (facultative) du créneau récurrent. Vides = toujours valable.
+    /// Renseignées = le créneau ne s'applique qu'entre ces dates (ex. un cours qui dure 3 semaines).
+    /// </summary>
+    public DateOnly? DateDebut { get; set; }
+    public DateOnly? DateFin { get; set; }
+
     /// <summary>true = disponible sur ce créneau, false = indisponible.</summary>
     public bool Disponible { get; set; } = true;
 

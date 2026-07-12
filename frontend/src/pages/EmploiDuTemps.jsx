@@ -4,11 +4,11 @@ import api, { messageErreur } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../lib/toast';
 import Icon from '../lib/icons';
-import { Field, Loading, Modal } from '../components/ui';
+import { ConflitModal, Field, Loading, Modal } from '../components/ui';
 
 const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const NOMS_JOUR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-const TYPES = ['Cours', 'TD', 'TP'];
+const TYPES = ['Cours', 'TD', 'TP', 'Examen'];
 
 const lundiDe = (d) => {
   const x = new Date(d);
@@ -19,6 +19,12 @@ const lundiDe = (d) => {
 };
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
+// Durée (en minutes) entre deux heures « HH:MM ».
+const minutesEntre = (debut, fin) => {
+  const [hd, md] = String(debut).split(':').map(Number);
+  const [hf, mf] = String(fin).split(':').map(Number);
+  return (hf * 60 + mf) - (hd * 60 + md);
+};
 // Affichage d'une salle dans l'emploi du temps : « numéro — bâtiment » (repli sur le nom si pas de numéro).
 const labelSalle = (s) => {
   if (!s) return '';
@@ -315,8 +321,8 @@ export default function EmploiDuTemps() {
                       <span>{s.matiere?.nom}</span>
                       <div className="ev-meta">
                         {vue !== 'enseignant' && s.enseignant && <div>{s.enseignant.nom} {s.enseignant.prenoms}</div>}
-                        {vue !== 'salle' && s.salle && <div>📍 {labelSalle(s.salle)}</div>}
-                        {vue !== 'groupe' && s.groupe && <div>👥 {s.groupe.nom}</div>}
+                        {vue !== 'salle' && s.salle && <div><Icon.pin width={13} height={13} style={{ verticalAlign: '-2px' }} /> {labelSalle(s.salle)}</div>}
+                        {vue !== 'groupe' && s.groupe && <div><Icon.groupe width={13} height={13} style={{ verticalAlign: '-2px' }} /> {s.groupe.nom}</div>}
                       </div>
                     </motion.div>
                   ))
@@ -480,6 +486,10 @@ function FeuilleImpression({ vue, cibleNom, groupe, annee, salles, lundi, samedi
   const colonnes = EP_JOURS.map((_, i) => colonneDuJour(parJour[i]));
   const salleAffichee = vue === 'salle' ? cibleNom : salles.join(' / ');
 
+  // Division (A / B…) : dernière lettre isolée du nom du groupe, sinon aucune (niveau non divisé).
+  const dernierMot = String(groupe?.nom || '').trim().split(/\s+/).pop();
+  const division = /^[A-Za-z]$/.test(dernierMot) ? dernierMot.toUpperCase() : null;
+
   return (
     <div className="edt-print" aria-hidden="true">
       <div className="ep-header">
@@ -488,7 +498,7 @@ function FeuilleImpression({ vue, cibleNom, groupe, annee, salles, lundi, samedi
             <>
               <div>MENTION : {groupe?.filiere?.nom || '—'}</div>
               <div>PARCOURS : {groupe?.parcours?.nom || 'TRONC COMMUN'}</div>
-              <div>NIVEAU : {groupe?.niveau?.nom || '—'}</div>
+              <div>NIVEAU : {groupe?.niveau?.nom || '—'}{division && <span style={{ marginLeft: 24 }}>GROUPE : {division}</span>}</div>
             </>
           ) : vue === 'enseignant' ? (
             <div>ENSEIGNANT : {cibleNom}</div>
@@ -549,39 +559,85 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
   const [f, setF] = useState(valeur);
   const [conflits, setConflits] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [sallesDispo, setSallesDispo] = useState([]);
+  const [effectif, setEffectif] = useState(0);
 
   const jour = jourNomDe(f.dateCours);
 
-  const creneauDe = (ensId) => refs.dispos.find((d) =>
-    String(d.enseignantId) === String(ensId) && d.jourSemaine === jour && d.disponible);
+  const dansPeriode = (d, dateStr) => {
+    if (!dateStr) return true;
+    const dd = d.dateDebut ? String(d.dateDebut).slice(0, 10) : null;
+    const df = d.dateFin ? String(d.dateFin).slice(0, 10) : null;
+    return (!dd || dateStr >= dd) && (!df || dateStr <= df);
+  };
 
-  const enseignantsDispo = refs.enseignants.filter((e) => !!creneauDe(e.id));
+  // Créneaux de disponibilité de l'enseignant pour le jour ET la période de la date choisie.
+  const creneauxDe = (ensId) => refs.dispos.filter((d) =>
+    String(d.enseignantId) === String(ensId) && d.jourSemaine === jour && d.disponible && dansPeriode(d, f.dateCours));
 
-  function appliquerHeures(next) {
-    const cr = next.enseignantId ? creneauDe(next.enseignantId) : null;
-    next.heureDebut = cr ? hhmm(cr.heureDebut) : '';
-    next.heureFin = cr ? hhmm(cr.heureFin) : '';
-    return next;
+  const enseignePar = (e) => (e.matieresIds || []).map(String).includes(String(f.matiereId));
+
+  // Enseignants qui enseignent la matière choisie ET sont disponibles ce jour-là
+  // (on garde aussi l'enseignant déjà sélectionné, utile en modification).
+  const enseignantsDispo = refs.enseignants.filter((e) =>
+    String(e.id) === String(f.enseignantId) || (f.matiereId && enseignePar(e) && creneauxDe(e.id).length > 0));
+
+  // Fenêtre(s) de disponibilité de l'enseignant sélectionné (pour guider les heures saisies).
+  const fenetre = f.enseignantId ? creneauxDe(f.enseignantId) : [];
+
+  // La matière porte déjà filière + niveau : le groupe se limite à la division (A / B) de cette classe.
+  const matiere = refs.matieres.find((m) => String(m.id) === String(f.matiereId));
+  const divGroupe = (nom) => { const last = String(nom || '').trim().split(/\s+/).pop(); return /^[A-Za-z]$/.test(last) ? last : nom; };
+  const groupesPourMatiere = matiere
+    ? refs.groupes.filter((g) => String(g.filiereId) === String(matiere.filiereId) && String(g.niveauId) === String(matiere.niveauId))
+    : [];
+
+  function setMatiere(v) {
+    setConflits(null);
+    // Si la filière+niveau de la matière n'a qu'un seul groupe (niveau non divisé), on le sélectionne d'office.
+    const m = refs.matieres.find((x) => String(x.id) === String(v));
+    const grps = m ? refs.groupes.filter((g) => String(g.filiereId) === String(m.filiereId) && String(g.niveauId) === String(m.niveauId)) : [];
+    setF((s) => ({
+      ...s, matiereId: v, enseignantId: '', heureDebut: '', heureFin: '',
+      groupeId: grps.length === 1 ? String(grps[0].id) : '',
+    }));
   }
 
   function setDate(v) {
     setConflits(null);
-    setF((s) => {
-      const next = { ...s, dateCours: v };
-      const nj = jourNomDe(v);
-      const cr = next.enseignantId && refs.dispos.find((d) => String(d.enseignantId) === String(next.enseignantId) && d.jourSemaine === nj && d.disponible);
-      if (!cr) { next.enseignantId = ''; next.heureDebut = ''; next.heureFin = ''; }
-      else { next.heureDebut = hhmm(cr.heureDebut); next.heureFin = hhmm(cr.heureFin); }
-      return next;
-    });
+    setF((s) => ({ ...s, dateCours: v, enseignantId: '', heureDebut: '', heureFin: '' }));
   }
 
   function setEnseignant(v) {
     setConflits(null);
-    setF((s) => appliquerHeures({ ...s, enseignantId: v }));
+    setF((s) => {
+      const cr = v ? creneauxDe(v)[0] : null;
+      // Par défaut on propose la fenêtre de dispo ; l'utilisateur peut ensuite réduire les heures.
+      return { ...s, enseignantId: v, heureDebut: cr ? hhmm(cr.heureDebut) : '', heureFin: cr ? hhmm(cr.heureFin) : '' };
+    });
   }
 
   const set = (k, v) => { setF((s) => ({ ...s, [k]: v })); setConflits(null); };
+
+  // Propose automatiquement les salles libres et assez grandes dès que date + heures + groupe sont connus.
+  useEffect(() => {
+    if (!f.dateCours || !f.heureDebut || !f.heureFin || !f.groupeId) { setSallesDispo([]); return; }
+    let annule = false;
+    api.get('/seances/salles-disponibles', {
+      params: {
+        date: f.dateCours, debut: `${f.heureDebut}:00`, fin: `${f.heureFin}:00`,
+        groupeId: f.groupeId, exclureId: f.id || undefined,
+      },
+    }).then(({ data }) => {
+      if (annule) return;
+      const dispo = Array.isArray(data?.salles) ? data.salles : [];
+      setSallesDispo(dispo);
+      setEffectif(data?.effectif ?? 0);
+      setF((s) => (dispo.some((x) => String(x.id) === String(s.salleId))
+        ? s : { ...s, salleId: dispo[0] ? String(dispo[0].id) : '' }));
+    }).catch(() => { if (!annule) setSallesDispo([]); });
+    return () => { annule = true; };
+  }, [f.dateCours, f.heureDebut, f.heureFin, f.groupeId, f.id]);
 
   function payload() {
     return {
@@ -599,6 +655,7 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
   async function enregistrer(forcer = false) {
     if (!f.matiereId) { toast.error('Sélectionnez une matière.'); return; }
     if (!f.enseignantId || !f.heureDebut) { toast.error('Sélectionnez une date puis un enseignant disponible.'); return; }
+    if (!f.heureFin || minutesEntre(f.heureDebut, f.heureFin) < 60) { toast.error('Un cours doit durer au moins 1 heure.'); return; }
     if (!f.salleId) { toast.error('Sélectionnez une salle.'); return; }
     if (!f.groupeId) { toast.error('Sélectionnez un groupe.'); return; }
     setBusy(true);
@@ -665,26 +722,15 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
           >
             Annuler
           </motion.button>
-          {conflits
-            ? <motion.button 
-                className="btn btn-danger" 
-                onClick={() => enregistrer(true)} 
-                disabled={busy}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Forcer l'enregistrement
-              </motion.button>
-            : <motion.button 
-                className="btn btn-primary" 
-                onClick={() => enregistrer(false)} 
-                disabled={busy}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {busy ? 'Vérification…' : 'Enregistrer'}
-              </motion.button>
-          }
+          <motion.button
+            className="btn btn-primary"
+            onClick={() => enregistrer(false)}
+            disabled={busy}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {busy ? 'Vérification…' : 'Enregistrer'}
+          </motion.button>
         </>
       }
     >
@@ -693,18 +739,6 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        {conflits && (
-          <motion.div 
-            className="alert alert-warn"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
-            <strong><Icon.warning width={15} height={15} /> Conflit(s) détecté(s)</strong>
-            <ul>{conflits.map((c, i) => <li key={i}>{c.message}</li>)}</ul>
-            <div style={{ marginTop: 6, fontSize: 12 }}>Corrigez les informations ou forcez l'enregistrement.</div>
-          </motion.div>
-        )}
-
         <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <motion.div 
             style={{ gridColumn: '1 / -1' }}
@@ -713,9 +747,9 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
             transition={{ delay: 0.05 }}
           >
             <Field label="Matière" required>
-              <select className="select" value={f.matiereId} onChange={(e) => set('matiereId', e.target.value)} required>
+              <select className="select" value={f.matiereId} onChange={(e) => setMatiere(e.target.value)} required>
                 <option value="">— Sélectionner —</option>
-                {refs.matieres.map((m) => <option key={m.id} value={m.id}>{m.codeMatiere} — {m.nom}</option>)}
+                {refs.matieres.map((m) => <option key={m.id} value={m.id}>{m.codeMatiere} — {m.nom} · {m.filiere?.nom} {m.niveau?.nom}</option>)}
               </select>
             </Field>
           </motion.div>
@@ -742,48 +776,57 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
           </motion.div>
 
           <motion.div
+            style={{ gridColumn: '1 / -1' }}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Field label="Enseignant (disponible ce jour)" required hint={f.dateCours ? `${enseignantsDispo.length} disponible(s) le ${jour}.` : 'Choisissez d\'abord la date.'}>
-              <select className="select" value={f.enseignantId} onChange={(e) => setEnseignant(e.target.value)} disabled={!f.dateCours} required>
+            <Field label="Enseignant (de la matière, disponible ce jour)" required
+              hint={!f.matiereId ? 'Choisissez d\'abord la matière.' : !f.dateCours ? 'Choisissez la date.' : `${enseignantsDispo.length} enseignant(s) de cette matière disponible(s) le ${jour}.`}>
+              <select className="select" value={f.enseignantId} onChange={(e) => setEnseignant(e.target.value)} disabled={!f.matiereId || !f.dateCours} required>
                 <option value="">— Sélectionner —</option>
                 {enseignantsDispo.map((o) => <option key={o.id} value={o.id}>{o.nom} {o.prenoms}</option>)}
               </select>
             </Field>
           </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-          >
-            <Field label="Horaire (selon disponibilité)" hint="Déterminé automatiquement par l'enseignant.">
-              <input className="input" type="text" readOnly value={f.heureDebut && f.heureFin ? `${f.heureDebut} – ${f.heureFin}` : '—'} />
+
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+            <Field label="Heure de début" required
+              hint={fenetre.length ? `Disponible : ${fenetre.map((c) => `${hhmm(c.heureDebut)}–${hhmm(c.heureFin)}`).join(', ')}` : 'Choisissez l\'enseignant.'}>
+              <input className="input" type="time" min="07:00" max="18:30" value={f.heureDebut} disabled={!f.enseignantId}
+                onChange={(e) => set('heureDebut', e.target.value)} required />
+            </Field>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+            <Field label="Heure de fin" required hint="Ajustez selon la durée réelle du cours.">
+              <input className="input" type="time" min="07:00" max="18:30" value={f.heureFin} disabled={!f.enseignantId}
+                onChange={(e) => set('heureFin', e.target.value)} required />
             </Field>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Field label="Salle" required>
-              <select className="select" value={f.salleId} onChange={(e) => set('salleId', e.target.value)} required>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+            <Field label="Groupe / classe" required
+              hint={!f.matiereId ? 'Choisissez d\'abord la matière.'
+                : groupesPourMatiere.length ? `Division (A / B) de ${matiere.filiere?.nom} ${matiere.niveau?.nom}.`
+                : 'Aucun groupe pour cette filière et ce niveau.'}>
+              <select className="select" value={f.groupeId} onChange={(e) => set('groupeId', e.target.value)} disabled={!f.matiereId} required>
                 <option value="">— Sélectionner —</option>
-                {refs.salles.map((o) => <option key={o.id} value={o.id}>{labelSalle(o)} ({o.capacite} pl.)</option>)}
+                {groupesPourMatiere.map((o) => <option key={o.id} value={o.id}>{divGroupe(o.nom)}</option>)}
               </select>
             </Field>
           </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-          >
-            <Field label="Nom du groupe" required>
-              <select className="select" value={f.groupeId} onChange={(e) => set('groupeId', e.target.value)} required>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+            <Field label="Salle (proposée automatiquement)" required
+              hint={!f.groupeId || !f.heureDebut || !f.heureFin ? 'Choisissez le groupe et les heures.'
+                : sallesDispo.length ? `${sallesDispo.length} salle(s) libre(s) pour ${effectif} étudiant(s).`
+                : 'Aucune salle libre assez grande à ce créneau.'}>
+              <select className="select" value={f.salleId} onChange={(e) => set('salleId', e.target.value)} required disabled={!sallesDispo.length}>
                 <option value="">— Sélectionner —</option>
-                {refs.groupes.map((o) => <option key={o.id} value={o.id}>{o.nom}</option>)}
+                {sallesDispo.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {(o.numero || o.nom)}{o.batiment ? ` — ${o.batiment.nom}` : ''} ({o.capacite} pl.)
+                  </option>
+                ))}
               </select>
             </Field>
           </motion.div>
@@ -812,6 +855,10 @@ function SeanceForm({ refs, valeur, onClose, onSaved }) {
           )}
         </div>
       </motion.div>
+
+      {conflits && (
+        <ConflitModal conflits={conflits} onCorriger={() => setConflits(null)} />
+      )}
     </Modal>
   );
 }

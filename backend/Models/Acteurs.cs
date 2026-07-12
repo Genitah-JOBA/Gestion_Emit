@@ -57,6 +57,7 @@ public class Groupe
     public Parcours? Parcours { get; set; }
 
     [JsonIgnore] public ICollection<Seance> Seances { get; set; } = new List<Seance>();
+    [JsonIgnore] public ICollection<Etudiant> Etudiants { get; set; } = new List<Etudiant>();
 }
 
 public class Etudiant
@@ -96,6 +97,10 @@ public class Etudiant
 
     public int? ParcoursId { get; set; }
     public Parcours? Parcours { get; set; }
+
+    /// <summary>Groupe (classe) de l'étudiant, ex. « L1 INFO A ». Facultatif.</summary>
+    public int? GroupeId { get; set; }
+    public Groupe? Groupe { get; set; }
 
     public int AnneeAcademiqueId { get; set; }
     public AnneeAcademique? AnneeAcademique { get; set; }

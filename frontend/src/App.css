@@ -94,6 +94,7 @@
 .edt-event.t-Cours { border-left-color: var(--primary); background: var(--primary-50); }
 .edt-event.t-TD { border-left-color: var(--accent); background: #e6fffb; }
 .edt-event.t-TP { border-left-color: #7c3aed; background: #f1ecfe; }
+.edt-event.t-Examen { border-left-color: #dc2626; background: #fef2f2; }
 .edt-event strong { display: block; font-weight: 600; }
 .edt-event .ev-meta { color: var(--muted); font-size: 10.5px; }
 
@@ -103,6 +104,23 @@
 .agenda-item { display: flex; gap: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; background: var(--surface); }
 .agenda-item .time { font-weight: 600; font-size: 13px; width: 96px; flex-shrink: 0; }
 .agenda-item .info { flex: 1; }
+
+/* ---------- Mes matières (espace enseignant) ---------- */
+.matieres-groupes { display: flex; flex-direction: column; gap: 22px; }
+.matiere-groupe-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); }
+.matiere-groupe-head h4 { font-size: 14px; font-weight: 700; color: var(--text); margin: 0; }
+.matiere-groupe-head svg { color: var(--primary); }
+.matiere-groupe-head .muted { margin-left: auto; font-size: 12px; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; }
+.matiere-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.matiere-carte { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+.matiere-carte-top { display: flex; align-items: center; justify-content: space-between; }
+.matiere-carte-top .muted { font-size: 12px; color: var(--muted); }
+.matiere-carte-nom { font-size: 14.5px; line-height: 1.3; color: var(--text); }
+.matiere-carte-meta { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.matiere-carte-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.matiere-carte-meta svg { color: var(--muted-light); flex-shrink: 0; }
+.matiere-carte-foot { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.matiere-carte-foot .chip { font-size: 11.5px; font-weight: 600; color: var(--primary-600); background: var(--primary-50); border: 1px solid #c7d7fe; border-radius: 999px; padding: 2px 9px; }
 
 /* ---------- Alerte conflits ---------- */
 .alert { padding: 13px 16px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 14px; }

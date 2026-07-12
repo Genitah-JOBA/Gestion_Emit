@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api, { messageErreur } from '../api/client';
 import { useToast } from '../lib/toast';
 import { Empty, Loading } from '../components/ui';
+import Icon from '../lib/icons';
 
 const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const lundiDe = (d) => { const x = new Date(d); const j = (x.getDay() + 6) % 7; x.setDate(x.getDate() - j); x.setHours(0, 0, 0, 0); return x; };
@@ -62,7 +63,7 @@ export default function MonEdt() {
                     <div className="time">{hhmm(s.heureDebut)} – {hhmm(s.heureFin)}</div>
                     <div className="info">
                       <strong>{s.matiere?.nom}</strong> <span className="badge badge-blue" style={{ marginLeft: 6 }}>{s.typeSeance}</span>
-                      <div className="muted" style={{ marginTop: 3 }}>📍 {s.salle?.nom} · 👥 {s.groupe?.nom}</div>
+                      <div className="muted" style={{ marginTop: 3 }}><Icon.pin width={13} height={13} style={{ verticalAlign: '-2px' }} /> {s.salle?.nom} · <Icon.groupe width={13} height={13} style={{ verticalAlign: '-2px' }} /> {s.groupe?.nom}</div>
                     </div>
                   </div>
                 ))}

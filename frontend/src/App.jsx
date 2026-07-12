@@ -6,11 +6,14 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import EmploiDuTemps from './pages/EmploiDuTemps';
 import MonEdt from './pages/MonEdt';
+import MesMatieres from './pages/MesMatieres';
 import AnneesAcademiques from './pages/AnneesAcademiques';
 import Utilisateurs from './pages/Utilisateurs';
+import DisponibilitesPage from './pages/Disponibilites';
+import Examens from './pages/Examens';
 import {
   FilieresPage, NiveauxPage, ParcoursPage, MatieresPage, SallesPage,
-  BatimentsPage, EnseignantsPage, GroupesPage, EtudiantsPage, DisponibilitesPage,
+  BatimentsPage, EnseignantsPage, GroupesPage, EtudiantsPage,
 } from './pages/resources';
 
 function RequireAuth({ children, role }) {
@@ -33,6 +36,7 @@ export default function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/mon-edt" element={<MonEdt />} />
+        <Route path="/mes-matieres" element={<MesMatieres />} />
 
         <Route path="/filieres" element={<FilieresPage />} />
         <Route path="/niveaux" element={<NiveauxPage />} />
@@ -47,6 +51,7 @@ export default function App() {
         <Route path="/batiments" element={<BatimentsPage />} />
 
         <Route path="/emploi-du-temps" element={<EmploiDuTemps />} />
+        <Route path="/examens" element={<Examens />} />
         <Route path="/disponibilites" element={<DisponibilitesPage />} />
 
         <Route path="/annees" element={<RequireAuth role="gestion"><AnneesAcademiques /></RequireAuth>} />

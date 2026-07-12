@@ -48,11 +48,31 @@ public class SeanceService
 
         foreach (var c in chevauchent.Where(x => x.EnseignantId == s.EnseignantId))
             conflits.Add(new ConflitInfo("enseignant",
-                $"Enseignant déjà en cours de {c.HeureDebut:HH\\:mm} à {c.HeureFin:HH\\:mm}.", c.Id));
+                $"Enseignant non disponible : il enseigne déjà {(c.Groupe != null ? c.Groupe.Nom : "un autre cours")} de {c.HeureDebut:HH\\:mm} à {c.HeureFin:HH\\:mm}.", c.Id));
 
         foreach (var c in chevauchent.Where(x => x.GroupeId == s.GroupeId))
             conflits.Add(new ConflitInfo("groupe",
                 $"Groupe déjà en cours de {c.HeureDebut:HH\\:mm} à {c.HeureFin:HH\\:mm}.", c.Id));
+
+        // Conflits avec les examens du même jour (un cours et un examen ne peuvent pas se chevaucher).
+        var examens = await _db.Examens.Include(x => x.Matiere).Include(x => x.Salles)
+            .Where(x => x.Date == s.DateCours && s.HeureDebut < x.HeureFin && x.HeureDebut < s.HeureFin)
+            .ToListAsync();
+        if (examens.Count > 0)
+        {
+            var groupe = await _db.Groupes.FindAsync(s.GroupeId);
+            foreach (var x in examens)
+            {
+                string? raison = null;
+                if (groupe != null && x.Matiere != null && x.Matiere.FiliereId == groupe.FiliereId && x.Matiere.NiveauId == groupe.NiveauId)
+                    raison = $"Ces étudiants ont un examen de {x.HeureDebut:HH\\:mm} à {x.HeureFin:HH\\:mm} ce jour-là.";
+                else if (x.Salles.Any(xs => xs.SalleId == s.SalleId))
+                    raison = $"Salle occupée par un examen de {x.HeureDebut:HH\\:mm} à {x.HeureFin:HH\\:mm}.";
+                else if (x.EnseignantId == s.EnseignantId)
+                    raison = $"L'enseignant surveille un examen de {x.HeureDebut:HH\\:mm} à {x.HeureFin:HH\\:mm}.";
+                if (raison != null) conflits.Add(new ConflitInfo("examen", raison, x.Id));
+            }
+        }
 
         // Le dimanche n'est pas un jour de cours.
         if (s.DateCours.DayOfWeek == DayOfWeek.Sunday)
@@ -66,7 +86,9 @@ public class SeanceService
         var jour = (JourSemaine)(int)s.DateCours.DayOfWeek;
 
         var dispos = await _db.Disponibilites
-            .Where(d => d.EnseignantId == s.EnseignantId && d.JourSemaine == jour)
+            .Where(d => d.EnseignantId == s.EnseignantId && d.JourSemaine == jour
+                        && (d.DateDebut == null || d.DateDebut <= s.DateCours)
+                        && (d.DateFin == null || d.DateFin >= s.DateCours))
             .ToListAsync();
 
         if (dispos.Count > 0)

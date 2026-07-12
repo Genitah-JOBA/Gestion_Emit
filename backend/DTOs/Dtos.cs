@@ -46,6 +46,19 @@ public record AppliquerGenerationRequest(
     int GroupeId, DateOnly Lundi, bool Recurrent, bool Remplacer,
     List<PropositionSeance> Propositions);
 
+// ---------- Saisie groupée des disponibilités ----------
+public record CreneauSaisie(JourSemaine JourSemaine, TimeOnly HeureDebut, TimeOnly HeureFin,
+    DateOnly? DateDebut, DateOnly? DateFin, bool Disponible, string? Commentaire);
+public record SaisieDisponibilitesRequest(int EnseignantId, List<CreneauSaisie> Creneaux);
+
+// ---------- Examens ----------
+public record ExamenSalleInput(int SalleId, string Surveillant1, string Surveillant2, string? Surveillant3);
+
+public record ExamenInput(
+    int MatiereId, DateOnly Date, TimeOnly HeureDebut, TimeOnly HeureFin,
+    int EnseignantId, SessionExamen Session, string? ChefScolarite,
+    List<ExamenSalleInput> Salles);
+
 // ---------- Tableau de bord ----------
 public record DashboardStats(
     int NbFilieres,

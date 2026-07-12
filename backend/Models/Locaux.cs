@@ -10,9 +10,6 @@ public class Batiment
     [Required, MaxLength(100)]
     public string Nom { get; set; } = string.Empty;
 
-    [MaxLength(250)]
-    public string? Adresse { get; set; }
-
     [JsonIgnore] public ICollection<Salle> Salles { get; set; } = new List<Salle>();
 }
 

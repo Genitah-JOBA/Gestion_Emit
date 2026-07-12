@@ -20,13 +20,11 @@ public static partial class Validations
         return DixChiffres().IsMatch(tel) && PrefixesTelephone.Any(p => tel.StartsWith(p));
     }
 
-    /// <summary>Email : contient « @ » et « . » et structure de base valide.</summary>
+    [GeneratedRegex(@"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")] private static partial Regex FormatEmail();
+
+    /// <summary>Email : caractères ASCII usuels (ni accent ni espace), partie locale, « @ », domaine et extension.</summary>
     public static bool EmailValide(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return false;
-        return email.Contains('@') && email.Contains('.')
-            && Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$");
-    }
+        => !string.IsNullOrWhiteSpace(email) && FormatEmail().IsMatch(email.Trim());
 
     /// <summary>CIN malgache : 12 chiffres. Le 6e chiffre code le genre (1 = Masculin, 2 = Féminin).</summary>
     public static bool CinValide(string? cin) => !string.IsNullOrWhiteSpace(cin) && FormatCin().IsMatch(cin);

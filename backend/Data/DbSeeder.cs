@@ -52,7 +52,7 @@ public static class DbSeeder
         db.Filieres.AddRange(info, gest);
 
         // ----- Bâtiment & salles -----
-        var batA = new Batiment { Nom = "Bâtiment A", Adresse = "Campus principal EMIT" };
+        var batA = new Batiment { Nom = "Bâtiment A" };
         db.Batiments.Add(batA);
         var amphiA = new Salle { Nom = "Amphi A", Capacite = 200, TypeSalle = TypeSalle.Amphitheatre, Batiment = batA };
         var salle12 = new Salle { Nom = "Salle 12", Capacite = 40, TypeSalle = TypeSalle.SalleDeClasse, Batiment = batA };

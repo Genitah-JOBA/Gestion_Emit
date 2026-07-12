@@ -2,6 +2,7 @@ import CrudResource, { capitaliserMots } from '../components/CrudResource';
 import { Tag } from '../components/ui';
 import { motion } from 'framer-motion';
 import { useState, useMemo, useCallback } from 'react';
+import Icon from '../lib/icons';
 
 // ---------- Animation d'entrée ----------
 const pageVariants = {
@@ -62,7 +63,7 @@ const SearchBar = ({ onSearch, onFilter, filters, columns, placeholder = "Recher
     <div className="search-container">
       <div className="search-bar">
         <div className="search-input-wrapper">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon"><Icon.search width={16} height={16} /></span>
           <input
             type="text"
             className="search-input"
@@ -71,8 +72,8 @@ const SearchBar = ({ onSearch, onFilter, filters, columns, placeholder = "Recher
             onChange={handleSearch}
           />
           {query && (
-            <button className="clear-search" onClick={() => { setQuery(''); onSearch(''); }}>
-              ✕
+            <button className="clear-search" onClick={() => { setQuery(''); onSearch(''); }} aria-label="Effacer">
+              <Icon.close width={15} height={15} />
             </button>
           )}
         </div>
@@ -81,7 +82,7 @@ const SearchBar = ({ onSearch, onFilter, filters, columns, placeholder = "Recher
             className={`btn btn-ghost btn-sm ${showAdvanced ? 'active' : ''}`}
             onClick={() => setShowAdvanced(!showAdvanced)}
           >
-            {showAdvanced ? 'Masquer' : 'Filtres avancés'} ⚙️
+            {showAdvanced ? 'Masquer' : 'Filtres avancés'} <Icon.filter width={14} height={14} style={{ verticalAlign: '-2px' }} />
           </button>
           <button className="btn btn-ghost btn-sm" onClick={clearFilters}>
             Effacer tout
@@ -233,8 +234,9 @@ const PREFIXES_TEL = ['032', '033', '034', '037', '038'];
 const valTelephone = (v) => (!v ? null :
   (/^\d{10}$/.test(v) && PREFIXES_TEL.some((p) => v.startsWith(p)) ? null
     : 'Téléphone : 10 chiffres commençant par 032, 033, 034, 037 ou 038.'));
-const valEmail = (v) => (v && v.includes('@') && v.includes('.') && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)
-  ? null : 'Email invalide — doit contenir « @ » et « . » (ex : nom@gmail.com).');
+// Email : caractères ASCII usuels uniquement (ni accent ni espace), une partie locale, « @ », un domaine et une extension.
+const valEmail = (v) => (/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test((v || '').trim())
+  ? null : 'Email invalide (ex : nom@gmail.com) — sans accent ni espace.');
 const valLettre = (v) => (/^[A-Z]$/.test(v || '') ? null : 'Une seule lettre majuscule (ex : I).');
 const valMatricule = (v) => (/^\d{3}[A-Z]\d{2}$/.test(v || '') ? null : 'Format attendu : 3 chiffres + lettre + 2 chiffres (ex : 130I24).');
 
@@ -254,6 +256,25 @@ const majUn = (v) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
 const nomFiliere = (f) => `${f.codeFiliere} — ${f.nom}`;
 const nomPersonne = (p) => `${p.nom} ${p.prenoms || ''}`.trim();
 const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
+// Affichage court d'un groupe : la lettre s'il est divisé (ex. « A »), sinon le nom complet (ex. « L2 INFO »).
+const detailGroupe = (nom) => {
+  if (!nom) return '';
+  const parts = String(nom).trim().split(/\s+/);
+  const last = parts[parts.length - 1];
+  return /^[A-Za-z]$/.test(last) ? last.toUpperCase() : nom;
+};
+
+// Acronyme court d'un parcours pour le nom de groupe.
+// Ex. « Communication Numérique et Management de Projet » -> « CNMP ».
+const MOTS_VIDES = new Set(['et', 'de', 'des', 'du', 'la', 'le', 'les', 'en', 'au', 'aux', 'a', 'à', 'pour', 'sur']);
+const acronymeParcours = (nom) => (nom || '')
+  .replace(/[–—-]/g, ' ')                 // tirets -> espaces
+  .split(/\s+/)
+  .map((w) => w.replace(/^[dl][''`]/i, '')) // enlève « d' » / « l' »
+  .filter((w) => w && !MOTS_VIDES.has(w.toLowerCase()))
+  .map((w) => w[0])
+  .join('')
+  .toUpperCase();
 
 // ======================================================================
 export function FilieresPage() {
@@ -437,8 +458,9 @@ export function MatieresPage() {
             disabled: (form) => !form.niveauId, hint: 'Dépend du niveau choisi.' },
           {
             name: 'parcoursId',
-            label: 'Parcours (optionnel)',
+            label: 'Parcours',
             type: 'select',
+            required: true,
             ref: 'parcours',
             options: (form, ref) => {
               const parcours = ref.parcours || [];
@@ -526,17 +548,15 @@ export function BatimentsPage() {
         sousTitre="Bâtiments de l'école" 
         endpoint="batiments"
         libelleAjout="Bâtiment" 
-        rechercheKeys={['nom', 'adresse']}
+        rechercheKeys={['nom']}
         columns={[
           { key: 'nom', label: 'Bâtiment', render: (r) => <strong>{r.nom}</strong> },
-          { key: 'adresse', label: 'Adresse', render: (r) => <span className="muted">{r.adresse || '—'}</span> },
         ]}
         fields={[
           { name: 'nom', label: 'Nom', required: true, placeholder: 'Bâtiment B' },
-          { name: 'adresse', label: 'Adresse', full: true },
         ]}
-        searchPlaceholder="Rechercher par nom ou adresse..."
-        filterableColumns={['nom', 'adresse']}
+        searchPlaceholder="Rechercher un bâtiment..."
+        filterableColumns={['nom']}
       />
     </motion.div>
   );
@@ -577,12 +597,12 @@ export function EnseignantsPage() {
           { name: 'nom', label: 'Nom', required: true, mask: 'letters', transform: capitaliserMots },
           { name: 'prenoms', label: 'Prénoms (optionnel)', mask: 'letters', transform: capitaliserMots },
           { name: 'grade', label: 'Grade', type: 'select', options: GRADE, required: true },
-          { name: 'email', label: 'Email', type: 'email', required: true, validate: valEmail },
+          { name: 'email', label: 'Email', type: 'text', required: true, validate: valEmail },
           { name: 'telephone', label: 'Téléphone', mask: 'phone', validate: valTelephone, placeholder: '0341234567' },
           {
             name: 'matieresIds', label: 'Matières enseignées', type: 'pills',
-            ref: 'matieres', optionLabel: (m) => `${m.codeMatiere} — ${m.nom}`, full: true,
-            hint: 'Cliquez sur les matières enseignées par cet enseignant.',
+            ref: 'matieres', optionLabel: (m) => `${m.codeMatiere} — ${m.nom} · ${m.filiere?.nom || ''} ${m.niveau?.nom || ''}`.trim(), full: true,
+            hint: 'Cliquez sur les matières enseignées par cet enseignant (une matière = une filière + un niveau).',
           },
         ]}
         searchPlaceholder="Rechercher par nom, prénom, email ou matière..."
@@ -608,11 +628,16 @@ export function GroupesPage() {
         libelleAjout="Groupe" 
         rechercheKeys={['nom']}
         derive={(form, ref) => {
+          if (form.id) return {}; // en modification, le nom est figé (pour ne pas perdre parcours/division)
           const niv = (ref.niveaux || []).find((n) => String(n.id) === String(form.niveauId));
           const fil = (ref.filieres || []).find((f) => String(f.id) === String(form.filiereId));
-          if (niv && fil && form.groupeLettre) {
-            // Nom composé : Niveau + Code-Filière + Lettre de groupe (ex : L2 INFO A).
-            return { nom: `${niv.nom} ${fil.codeFiliere} ${form.groupeLettre}` };
+          const parc = (ref.parcours || []).find((p) => String(p.id) === String(form.parcoursId));
+          if (niv && fil) {
+            // Nom : Niveau + Code-Filière + Acronyme du parcours + Division éventuelle.
+            // Ex : « M1 COM IC » ou « M1 COM CNMP A » (le parcours distingue les groupes).
+            const codeParc = parc ? ` ${acronymeParcours(parc.nom)}` : '';
+            const division = form.groupeLettre ? ` ${form.groupeLettre}` : '';
+            return { nom: `${niv.nom} ${fil.codeFiliere}${codeParc}${division}` };
           }
           return {};
         }}
@@ -626,9 +651,10 @@ export function GroupesPage() {
           { name: 'niveauId', label: 'Niveau', type: 'select', ref: 'niveaux', required: true },
           { name: 'filiereId', label: 'Filière', type: 'select', ref: 'filieres', optionLabel: nomFiliere, required: true },
           { 
-            name: 'parcoursId', 
-            label: 'Parcours (optionnel)', 
-            type: 'select', 
+            name: 'parcoursId',
+            label: 'Parcours',
+            type: 'select',
+            required: true,
             ref: 'parcours',
             options: (form, ref) => {
               const parcours = ref.parcours || [];
@@ -658,11 +684,11 @@ export function GroupesPage() {
                 label: p.nom
               }));
             },
-            disabled: (form) => !form.filiereId || !form.niveauId,
-            hint: 'Seuls les parcours disponibles pour cette filière et ce niveau sont affichés.'
+            disabled: (form) => !form.filiereId || !form.niveauId
           },
-          { name: 'groupeLettre', label: 'Groupe', type: 'select', options: GROUPE_LETTRES, required: true, formOnly: true },
-          { name: 'nom', label: 'Nom du groupe (généré)', readOnly: true, full: true, hint: 'Composé automatiquement : Niveau Code-Filière Groupe (ex : L2 INFO A).' },
+          { name: 'groupeLettre', label: 'Division (optionnel)', type: 'select', options: GROUPE_LETTRES, formOnly: true,
+            fromRow: (row) => { const last = String(row.nom || '').trim().split(/\s+/).pop(); return /^[A-Za-z]$/.test(last) ? last.toUpperCase() : ''; } },
+          { name: 'nom', label: 'Nom du groupe (généré)', readOnly: true, full: true },
         ]}
         searchPlaceholder="Rechercher un groupe..."
         filterableColumns={['nom', 'filiere.nom', 'niveau.nom', 'parcours.nom']}
@@ -711,6 +737,15 @@ export function EtudiantsPage() {
             const g = genreDepuisCin(form.cin);
             if (g) patch.sexe = g;
           }
+          // Vide le groupe s'il ne correspond plus à la filière/niveau choisis.
+          if (form.groupeId) {
+            const grp = (ref.groupes || []).find((x) => String(x.id) === String(form.groupeId));
+            if (!grp
+              || (form.filiereId && String(grp.filiereId) !== String(form.filiereId))
+              || (form.niveauId && String(grp.niveauId) !== String(form.niveauId))) {
+              patch.groupeId = '';
+            }
+          }
           return patch;
         }}
         columns={[
@@ -718,8 +753,8 @@ export function EtudiantsPage() {
           { key: 'nom', label: 'Étudiant', render: (r) => <strong>{r.nom} {r.prenoms}</strong> },
           { key: 'filiere.nom', label: 'Filière' },
           { key: 'niveau.nom', label: 'Niveau' },
+          { key: 'groupe.nom', label: 'Groupe', render: (r) => (r.groupe ? detailGroupe(r.groupe.nom) : '—') },
           { key: 'email', label: 'Email', render: (r) => r.email || '—' },
-          { key: 'telephone', label: 'Téléphone', render: (r) => r.telephone || '—' },
           { key: 'statut', label: 'Statut', render: (r) => <Tag value={r.statut} /> },
         ]}
         fields={[
@@ -730,20 +765,21 @@ export function EtudiantsPage() {
           { name: 'dateNaissance', label: 'Date de naissance', type: 'date', required: true, validate: (v) => { const a = ageDe(v); return a != null && a < 13 ? "L'étudiant doit avoir au moins 13 ans." : null; }, hint: 'Au moins 13 ans à l\'inscription.' },
           { name: 'cin', label: 'CIN', mask: 'cin', required: true, hidden: (form) => !estMajeur(form.dateNaissance), hint: '12 chiffres. Le 6e chiffre : 1 = Masculin, 2 = Féminin.', validate: (v) => (/^\d{12}$/.test(v || '') ? (['1', '2'].includes((v || '')[5]) ? null : 'Le 6e chiffre doit être 1 (M) ou 2 (F).') : 'CIN : 12 chiffres.') },
           { name: 'sexe', label: 'Sexe', type: 'select', options: SEXE, required: true, disabled: (form) => estMajeur(form.dateNaissance), hint: 'Automatique pour les majeurs (selon le CIN).' },
-          { name: 'email', label: 'Email', type: 'email', required: true, validate: valEmail },
+          { name: 'email', label: 'Email', type: 'text', required: true, validate: valEmail },
           { name: 'telephone', label: 'Téléphone', mask: 'phone', validate: valTelephone, placeholder: '0331234567' },
           { name: 'filiereId', label: 'Filière', type: 'select', ref: 'filieres', optionLabel: nomFiliere, required: true },
           { name: 'niveauId', label: 'Niveau', type: 'select', ref: 'niveaux', required: true },
           { 
             name: 'parcoursId', 
-            label: 'Parcours (optionnel)', 
-            type: 'select', 
+            label: 'Parcours',
+            type: 'select',
+            required: true,
             ref: 'parcours',
             options: (form, ref) => {
               const parcours = ref.parcours || [];
               const filiereId = form.filiereId;
               const niveauId = form.niveauId;
-              
+
               let filtered = parcours;
               if (filiereId) {
                 filtered = filtered.filter(p => String(p.filiereId) === String(filiereId));
@@ -770,6 +806,18 @@ export function EtudiantsPage() {
             disabled: (form) => !form.filiereId || !form.niveauId,
             hint: 'Seuls les parcours disponibles pour la filière et le niveau sélectionnés sont affichés.'
           },
+          {
+            name: 'groupeId',
+            label: 'Groupe / classe (optionnel)',
+            type: 'select',
+            ref: 'groupes',
+            options: (form, ref) => (ref.groupes || [])
+              .filter((g) => (!form.filiereId || String(g.filiereId) === String(form.filiereId))
+                          && (!form.niveauId || String(g.niveauId) === String(form.niveauId)))
+              .map((g) => ({ value: g.id, label: detailGroupe(g.nom) })),
+            disabled: (form) => !form.filiereId || !form.niveauId,
+            hint: 'Groupe de la filière et du niveau choisis (ex. A/B, ou toute la promo).'
+          },
           { name: 'statut', label: 'Statut', type: 'select', options: STATUT, required: true },
           { name: 'anneeAcademiqueId', label: 'Année académique', type: 'select', ref: 'anneesacademiques', optionLabel: (a) => a.libelle, hidden: true },
         ]}
@@ -780,40 +828,4 @@ export function EtudiantsPage() {
   );
 }
 
-export function DisponibilitesPage() {
-  return (
-    <motion.div
-      className="page-enter"
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      variants={pageVariants}
-      transition={pageTransition}
-    >
-      <CrudResource
-        sousTitre="Créneaux hebdomadaires (7h–19h) utilisés pour planifier les séances et détecter les conflits"
-        endpoint="disponibilites" 
-        libelleAjout="Créneau" 
-        rechercheKeys={['enseignant.nom', 'enseignant.prenoms']}
-        columns={[
-          { key: 'enseignant', label: 'Enseignant', render: (r) => <strong>{r.enseignant ? nomPersonne(r.enseignant) : '—'}</strong> },
-          { key: 'jourSemaine', label: 'Jour' },
-          { key: 'creneau', label: 'Créneau', render: (r) => `${hhmm(r.heureDebut)} – ${hhmm(r.heureFin)}` },
-          { key: 'disponible', label: 'État', render: (r) => <Tag value={r.disponible ? 'Disponible' : 'Indisponible'} /> },
-          { key: 'commentaire', label: 'Note', render: (r) => <span className="muted">{r.commentaire || '—'}</span> },
-        ]}
-        fields={[
-          { name: 'enseignantId', label: 'Enseignant', type: 'select', ref: 'enseignants', optionLabel: nomPersonne, required: true, full: true },
-          { name: 'jourSemaine', label: 'Jour de la semaine', type: 'select', options: opt(['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']), required: true },
-          { name: 'disponible', label: 'Disponible sur ce créneau', type: 'checkbox', default: true },
-          { name: 'heureDebut', label: 'Heure de début', type: 'time', required: true, min: '07:00', max: '19:00', hint: 'Entre 07:00 et 19:00.' },
-          { name: 'heureFin', label: 'Heure de fin', type: 'time', required: true, min: '07:00', max: '19:00',
-            validate: (v, form) => { if (!form.heureDebut) return null; if (v <= form.heureDebut) return "Doit être après l'heure de début."; const [h1, m1] = form.heureDebut.split(':').map(Number); const [h2, m2] = v.split(':').map(Number); if ((h2 * 60 + m2) - (h1 * 60 + m1) < 60) return 'Durée minimale : 1 heure.'; return null; } },
-          { name: 'commentaire', label: 'Commentaire', full: true },
-        ]}
-        searchPlaceholder="Rechercher par nom d'enseignant..."
-        filterableColumns={['enseignant.nom', 'enseignant.prenoms', 'jourSemaine', 'disponible']}
-      />
-    </motion.div>
-  );
-}
+// La page Disponibilités est désormais un composant dédié : voir pages/Disponibilites.jsx.

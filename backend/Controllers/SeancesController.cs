@@ -60,6 +60,41 @@ public class SeancesController(AppDbContext db, SeanceService service, Planifica
         => await service.VerifierAsync(input, exclureId);
 
     /// <summary>
+    /// Salles libres (aucun conflit à ce créneau) et assez grandes pour l'effectif du groupe,
+    /// triées de la plus petite qui convient à la plus grande. Sert à proposer une salle automatiquement.
+    /// </summary>
+    [HttpGet("salles-disponibles")]
+    public async Task<ActionResult> SallesDisponibles(
+        [FromQuery] DateOnly date, [FromQuery] TimeOnly debut, [FromQuery] TimeOnly fin,
+        [FromQuery] int groupeId, [FromQuery] int? exclureId = null)
+    {
+        if (fin <= debut) return Ok(new { effectif = 0, salles = Array.Empty<object>() });
+
+        var effectif = await db.Etudiants.CountAsync(e => e.GroupeId == groupeId);
+
+        // Salles déjà occupées à ce créneau (séances qui se chevauchent le même jour).
+        var occupees = await db.Seances
+            .Where(s => s.DateCours == date && (exclureId == null || s.Id != exclureId)
+                        && s.HeureDebut < fin && debut < s.HeureFin)
+            .Select(s => s.SalleId).Distinct().ToListAsync();
+
+        var salles = await db.Salles.Include(s => s.Batiment)
+            .Where(s => !occupees.Contains(s.Id) && (effectif == 0 || s.Capacite >= effectif))
+            .OrderBy(s => s.Capacite)
+            .ToListAsync();
+
+        return Ok(new
+        {
+            effectif,
+            salles = salles.Select(s => new
+            {
+                s.Id, s.Nom, s.Numero, s.Capacite,
+                batiment = s.Batiment == null ? null : new { s.Batiment.Nom },
+            }),
+        });
+    }
+
+    /// <summary>
     /// Génère automatiquement une proposition d'emploi du temps pour un groupe et une semaine
     /// (algorithme d'optimisation sous contraintes). Rien n'est enregistré : la proposition est
     /// renvoyée pour revue avant application via <c>appliquer</c>.

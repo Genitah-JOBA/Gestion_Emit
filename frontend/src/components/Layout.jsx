@@ -21,6 +21,7 @@ const SECTIONS = [
     items: [
       { to: '/dashboard', label: 'Tableau de bord', icon: 'dashboard' },
       { to: '/mon-edt', label: 'Mon emploi du temps', icon: 'clock', enseignantOnly: true },
+      { to: '/mes-matieres', label: 'Mes matières', icon: 'book', enseignantOnly: true },
     ],
   },
   {
@@ -51,6 +52,7 @@ const SECTIONS = [
     label: 'Planification',
     items: [
       { to: '/emploi-du-temps', label: 'Emploi du temps', icon: 'calendar' },
+      { to: '/examens', label: 'Examens', icon: 'matiere' },
       { to: '/disponibilites', label: 'Disponibilités', icon: 'clock' },
     ],
   },
@@ -556,8 +558,8 @@ export default function Layout() {
               <img src="/logoNoir.png" alt="EMIT" />
             </div>
             <div className="brand-text">
-              <strong>EMIT</strong>
-              <span>Gestion des études</span>
+              <strong>Cadence</strong>
+              <span>Le bon rythme des cours</span>
             </div>
           </motion.div>
 
@@ -688,7 +690,7 @@ export default function Layout() {
 
 function titreDe(path) {
   const map = {
-    '/dashboard': 'Tableau de bord', '/mon-edt': 'Mon emploi du temps',
+    '/dashboard': 'Tableau de bord', '/mon-edt': 'Mon emploi du temps', '/mes-matieres': 'Mes matières',
     '/filieres': 'Filières', '/niveaux': 'Niveaux', '/parcours': 'Parcours', '/matieres': 'Matières',
     '/etudiants': 'Étudiants', '/enseignants': 'Enseignants', '/groupes': 'Groupes',
     '/salles': 'Salles', '/batiments': 'Bâtiments',

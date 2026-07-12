@@ -37,6 +37,24 @@ export function Confirm({ titre = 'Confirmer la suppression', message, onConfirm
   );
 }
 
+export function ConflitModal({ titre = 'Conflit(s) détecté(s)', conflits, onCorriger }) {
+  return (
+    <Modal title={titre} onClose={onCorriger} footer={
+      <button className="btn btn-primary" onClick={onCorriger}>Corriger</button>
+    }>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--warning)', fontWeight: 600, marginBottom: 10 }}>
+        <Icon.warning width={18} height={18} /> Impossible d'enregistrer : ce créneau entre en conflit
+      </div>
+      <ul style={{ margin: 0, paddingLeft: 18 }}>
+        {conflits.map((c, i) => <li key={i} style={{ marginBottom: 4 }}>{c.message}</li>)}
+      </ul>
+      <p className="muted" style={{ margin: '10px 0 0', fontSize: 12.5 }}>
+        Corrigez les informations pour pouvoir enregistrer.
+      </p>
+    </Modal>
+  );
+}
+
 export function Loading({ label = 'Chargement…' }) {
   return <div className="center-box"><div style={{ textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto 12px' }} /><div className="muted">{label}</div></div></div>;
 }

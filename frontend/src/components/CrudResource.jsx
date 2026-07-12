@@ -278,34 +278,9 @@ function ChampForm({ field, value, form, refData, error, onChange }) {
   }
 
   if (field.type === 'pills') {
-    const selected = Array.isArray(value) ? value.map(String) : [];
-    const options = optionsDe(field, refData, form);
-    const toggle = (val) => {
-      const s = String(val);
-      const next = selected.includes(s) ? selected.filter((x) => x !== s) : [...selected, s];
-      onChange(next.map((x) => { const n = Number(x); return Number.isNaN(n) ? x : n; }));
-    };
     return (
-      <Field label={field.label} required={field.required} error={error} hint={field.hint}>
-        <div className="pills-group">
-          {options.map((o) => {
-            const isSel = selected.includes(String(o.value));
-            return (
-              <button
-                type="button"
-                key={o.value}
-                disabled={disabled}
-                className={`pill${isSel ? ' selected' : ''}`}
-                onClick={() => toggle(o.value)}
-              >
-                <span className="pill-dot" />
-                {o.label}
-                {isSel && <span className="pill-check">✓</span>}
-              </button>
-            );
-          })}
-        </div>
-      </Field>
+      <PillsField field={field} value={value} form={form} refData={refData}
+        error={error} disabled={disabled} onChange={onChange} />
     );
   }
 
@@ -334,6 +309,51 @@ function ChampForm({ field, value, form, refData, error, onChange }) {
           onChange={(e) => handle(e.target.value)}
         />
       )}
+    </Field>
+  );
+}
+
+// Champ « pills » (multi-sélection) avec recherche — utile quand il y a beaucoup d'options (ex. matières).
+function PillsField({ field, value, form, refData, error, disabled, onChange }) {
+  const [q, setQ] = useState('');
+  const selected = Array.isArray(value) ? value.map(String) : [];
+  const options = optionsDe(field, refData, form);
+  const toggle = (val) => {
+    const s = String(val);
+    const next = selected.includes(s) ? selected.filter((x) => x !== s) : [...selected, s];
+    onChange(next.map((x) => { const n = Number(x); return Number.isNaN(n) ? x : n; }));
+  };
+  // Recherche « sous tous les angles » : le libellé contient déjà code + nom + filière + niveau.
+  const termes = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtres = termes.length
+    ? options.filter((o) => { const lab = String(o.label).toLowerCase(); return termes.every((t) => lab.includes(t)); })
+    : options;
+
+  return (
+    <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+      {options.length > 6 && (
+        <div className="pills-search">
+          <Icon.search />
+          <input className="input" placeholder="Rechercher (code, nom, filière, niveau)…"
+            value={q} onChange={(e) => setQ(e.target.value)} />
+          <span className="muted nowrap">{selected.length} sélectionnée(s)</span>
+        </div>
+      )}
+      <div className="pills-group pills-scroll">
+        {filtres.length === 0
+          ? <span className="muted" style={{ fontSize: 13, padding: '4px 2px' }}>Aucune correspondance.</span>
+          : filtres.map((o) => {
+            const isSel = selected.includes(String(o.value));
+            return (
+              <button type="button" key={o.value} disabled={disabled}
+                className={`pill${isSel ? ' selected' : ''}`} onClick={() => toggle(o.value)}>
+                <span className="pill-dot" />
+                {o.label}
+                {isSel && <span className="pill-check"><Icon.check width={12} height={12} /></span>}
+              </button>
+            );
+          })}
+      </div>
     </Field>
   );
 }
@@ -376,6 +396,8 @@ function initialValues(fields) {
 function toForm(row, fields) {
   const o = { id: row.id };
   fields.forEach((f) => {
+    // Champ dont la valeur d'édition se déduit de la ligne (ex : division d'un groupe extraite du nom).
+    if (f.fromRow) { o[f.name] = f.fromRow(row); return; }
     let val = row[f.name];
     if (f.type === 'pills') {
       // Lit un tableau d'identifiants (ex: niveauxIds) ou le déduit d'une collection (ex: niveaux).

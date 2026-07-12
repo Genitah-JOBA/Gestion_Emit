@@ -8,7 +8,10 @@ public enum StatutEtudiant { Passant, Redoublant, Suspendu, Renvoi }
 /// <summary>Types de salles de l'EMIT.</summary>
 public enum TypeSalle { Bureau, Amphitheatre, SalleDeClasse, SalleDeReunion, Studio, SalleDeSoutenance }
 
-public enum TypeSeance { Cours, TD, TP }
+public enum TypeSeance { Cours, TD, TP, Examen }
+
+/// <summary>Session d'examen : session normale ou rattrapage.</summary>
+public enum SessionExamen { Normale, Rattrapage }
 
 /// <summary>Grades enseignants (Docteur ajouté).</summary>
 public enum GradeEnseignant { Vacataire, Assistant, MaitreAssistant, MaitreDeConferences, Professeur, Docteur }

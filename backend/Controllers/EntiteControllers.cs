@@ -1,4 +1,5 @@
 using EmitGestion.Api.Data;
+using EmitGestion.Api.DTOs;
 using EmitGestion.Api.Models;
 using EmitGestion.Api.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -119,7 +120,7 @@ public class ParcoursController(AppDbContext db) : CrudController<Parcours>(db)
 
 public class BatimentsController(AppDbContext db) : CrudController<Batiment>(db)
 {
-    protected override void Map(Batiment c, Batiment s) { c.Nom = s.Nom; c.Adresse = s.Adresse; }
+    protected override void Map(Batiment c, Batiment s) { c.Nom = s.Nom; }
 }
 
 public class SallesController(AppDbContext db) : CrudController<Salle>(db)
@@ -236,6 +237,21 @@ public class EnseignantsController(AppDbContext db) : CrudController<Enseignant>
             foreach (var m in Db.Matieres.Where(m => ids.Contains(m.Id)))
                 c.Matieres.Add(m);
     }
+    /// <summary>Matières enseignées par l'enseignant lié au compte connecté.</summary>
+    [HttpGet("mes-matieres")]
+    public async Task<ActionResult<IEnumerable<Matiere>>> MesMatieres()
+    {
+        var idClaim = User.FindFirst("enseignantId")?.Value;
+        if (!int.TryParse(idClaim, out var enseignantId))
+            return BadRequest(new { message = "Aucune fiche enseignant n'est liée à ce compte." });
+
+        return await Db.Matieres
+            .Include(m => m.Filiere).Include(m => m.Niveau).Include(m => m.Parcours)
+            .Where(m => m.Enseignants.Any(e => e.Id == enseignantId))
+            .OrderBy(m => m.Niveau!.Ordre).ThenBy(m => m.CodeMatiere)
+            .AsNoTracking().ToListAsync();
+    }
+
     protected override async Task ValidateAsync(Enseignant e, bool modification)
     {
         if (string.IsNullOrWhiteSpace(e.Nom)) throw new ValidationException("Le nom est obligatoire.");
@@ -270,7 +286,8 @@ public class EtudiantsController(AppDbContext db) : CrudController<Etudiant>(db)
 {
     protected override IQueryable<Etudiant> Query() =>
         Db.Etudiants
-            .Include(e => e.Filiere).Include(e => e.Niveau).Include(e => e.Parcours).Include(e => e.AnneeAcademique)
+            .Include(e => e.Filiere).Include(e => e.Niveau).Include(e => e.Parcours)
+            .Include(e => e.Groupe).Include(e => e.AnneeAcademique)
             .OrderBy(e => e.Nom).ThenBy(e => e.Prenoms);
     protected override void Map(Etudiant c, Etudiant s)
     {
@@ -285,6 +302,7 @@ public class EtudiantsController(AppDbContext db) : CrudController<Etudiant>(db)
         c.FiliereId = s.FiliereId;
         c.NiveauId = s.NiveauId;
         c.ParcoursId = s.ParcoursId;
+        c.GroupeId = s.GroupeId;
         c.AnneeAcademiqueId = s.AnneeAcademiqueId;
         c.Statut = s.Statut;
     }
@@ -323,6 +341,14 @@ public class EtudiantsController(AppDbContext db) : CrudController<Etudiant>(db)
             }
         }
 
+        // Le groupe (facultatif) doit correspondre à la filière et au niveau de l'étudiant.
+        if (e.GroupeId is int gid)
+        {
+            var groupe = await Db.Groupes.FindAsync(gid) ?? throw new ValidationException("Groupe introuvable.");
+            if (groupe.FiliereId != e.FiliereId || groupe.NiveauId != e.NiveauId)
+                throw new ValidationException("Le groupe choisi ne correspond pas à la filière et au niveau de l'étudiant.");
+        }
+
         await UniciteContact.VerifierAsync(Db, e.Email, e.Telephone, etudiantIdExclu: modification ? e.Id : null);
     }
 }
@@ -337,6 +363,8 @@ public class DisponibilitesController(AppDbContext db) : CrudController<Disponib
         c.JourSemaine = s.JourSemaine;
         c.HeureDebut = s.HeureDebut;
         c.HeureFin = s.HeureFin;
+        c.DateDebut = s.DateDebut;
+        c.DateFin = s.DateFin;
         c.Disponible = s.Disponible;
         c.Commentaire = s.Commentaire;
     }
@@ -348,7 +376,50 @@ public class DisponibilitesController(AppDbContext db) : CrudController<Disponib
         if (e.HeureFin > max) throw new ValidationException("L'heure de fin ne peut pas dépasser 19:00.");
         if (e.HeureFin <= e.HeureDebut) throw new ValidationException("L'heure de fin doit être après l'heure de début.");
         if ((e.HeureFin - e.HeureDebut) < TimeSpan.FromHours(1)) throw new ValidationException("La disponibilité doit durer au moins 1 heure.");
+        if (e.DateDebut is DateOnly d && e.DateFin is DateOnly f && f < d)
+            throw new ValidationException("La date de fin de validité doit être après la date de début.");
         return Task.CompletedTask;
+    }
+
+    /// <summary>Création groupée : plusieurs créneaux pour un même enseignant en une seule requête.</summary>
+    [HttpPost("batch")]
+    [Authorize(Roles = Roles.Gestion)]
+    public async Task<ActionResult> CreerLot([FromBody] SaisieDisponibilitesRequest req)
+    {
+        if (req.EnseignantId <= 0 || !await db.Enseignants.AnyAsync(e => e.Id == req.EnseignantId))
+            return BadRequest(new { message = "Veuillez sélectionner un enseignant." });
+        if (req.Creneaux is null || req.Creneaux.Count == 0)
+            return BadRequest(new { message = "Ajoutez au moins un créneau." });
+
+        var min = new TimeOnly(7, 0);
+        var max = new TimeOnly(19, 0);
+        var crees = new List<DisponibiliteEnseignant>();
+        foreach (var c in req.Creneaux)
+        {
+            if (c.HeureFin <= c.HeureDebut)
+                return BadRequest(new { message = "Chaque créneau : l'heure de fin doit être après l'heure de début." });
+            if (c.HeureDebut < min || c.HeureFin > max)
+                return BadRequest(new { message = "Les créneaux doivent être compris entre 07:00 et 19:00." });
+            if ((c.HeureFin - c.HeureDebut) < TimeSpan.FromHours(1))
+                return BadRequest(new { message = "Chaque créneau doit durer au moins 1 heure." });
+            if (c.DateDebut is DateOnly d && c.DateFin is DateOnly f && f < d)
+                return BadRequest(new { message = "La date de fin de validité doit être après la date de début." });
+
+            crees.Add(new DisponibiliteEnseignant
+            {
+                EnseignantId = req.EnseignantId,
+                JourSemaine = c.JourSemaine,
+                HeureDebut = c.HeureDebut,
+                HeureFin = c.HeureFin,
+                DateDebut = c.DateDebut,
+                DateFin = c.DateFin,
+                Disponible = c.Disponible,
+                Commentaire = string.IsNullOrWhiteSpace(c.Commentaire) ? null : c.Commentaire.Trim(),
+            });
+        }
+        db.Disponibilites.AddRange(crees);
+        await db.SaveChangesAsync();
+        return Ok(new { crees = crees.Count });
     }
 }
 

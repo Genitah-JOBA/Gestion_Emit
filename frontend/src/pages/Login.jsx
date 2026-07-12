@@ -892,20 +892,14 @@ export default function Login() {
                         autoFocus 
                         required
                         className={`field-input ${
-                          nomErreur && nomTouched ? 'field-error-border' : 
+                          nomErreur && nomTouched && loginId.trim().length > 0 ? 'field-error-border' :
                           estNomValide && nomTouched ? 'field-success-border' : ''
                         }`}
                       />
-                      {nomErreur && nomTouched && (
+                      {nomErreur && nomTouched && loginId.trim().length > 0 && (
                         <div className="field-error-message">
                           <IconWarning />
                           {nomErreur}
-                        </div>
-                      )}
-                      {estNomValide && nomTouched && (
-                        <div className="field-success-message">
-                          <IconCheck />
-                          Nom valide
                         </div>
                       )}
                     </div>
@@ -929,7 +923,7 @@ export default function Login() {
                         placeholder="••••••••" 
                         required
                         className={`field-input ${
-                          mdpErreur && mdpTouched ? 'field-error-border' : 
+                          mdpErreur && mdpTouched && mdp.length > 0 ? 'field-error-border' :
                           estMdpValide && mdpTouched ? 'field-success-border' : ''
                         }`}
                       />
@@ -959,16 +953,10 @@ export default function Login() {
                         {showPassword ? <IconEyeOff /> : <IconEye />}
                       </button>
                       
-                      {mdpErreur && mdpTouched && (
+                      {mdpErreur && mdpTouched && mdp.length > 0 && (
                         <div className="field-error-message">
                           <IconWarning />
                           {mdpErreur}
-                        </div>
-                      )}
-                      {estMdpValide && mdpTouched && (
-                        <div className="field-success-message">
-                          <IconCheck />
-                          Mot de passe valide
                         </div>
                       )}
                     </div>
